@@ -192,6 +192,7 @@ function chargesFor(u, cfg) {
 }
 function unitState(u, cfg) {
   if (!u || u.status !== 'occupied') return { key: 'vacant', open: [], charges: [] };
+  if (baseValue(u) <= 0) return { key: 'exempt', open: [], charges: [] };
   const charges = chargesFor(u, cfg); const open = charges.filter(c => c.status !== 'paid');
   let key = 'paid';
   if (open.some(c => c.status === 'overdue')) key = 'overdue';
@@ -201,7 +202,7 @@ function unitState(u, cfg) {
 }
 const contractDaysLeft = (u) => u.contractEnd ? daysBetween(todayD(), parseYmd(u.contractEnd)) : null;
 function statusPill(key, extra = '') {
-  const m = { paid: ['p-paid', 'Em dia'], overdue: ['p-over', 'Em atraso'], soon: ['p-soon', 'Vence em breve'], pending: ['p-pend', 'A vencer'], vacant: ['p-vac', 'Vaga'] }[key];
+  const m = { exempt: ['p-paid', 'Isento'], paid: ['p-paid', 'Em dia'], overdue: ['p-over', 'Em atraso'], soon: ['p-soon', 'Vence em breve'], pending: ['p-pend', 'A vencer'], vacant: ['p-vac', 'Vaga'] }[key];
   return `<span class="pill ${m[0]}">${m[1]}${extra ? ' ' + esc(extra) : ''}</span>`;
 }
 
@@ -474,7 +475,7 @@ function renderUnits() {
     return `<div class="card unit" data-open="${esc(u.id)}">
       <div class="row between"><div class="num">${esc(u.number)}</div>${statusPill(st.key)}</div>
       <div style="font-weight:600;margin-top:4px">${u.status === 'occupied' ? esc(u.tenantName || 'Sem nome') : 'Disponível'}</div>
-      <div class="small muted">${brl(baseValue(u))}/mês${u.hasGarage ? ' (c/ garagem)' : ''} • paga todo dia ${pad(u.dueDay || 10)}</div>
+      <div class="small muted">${u.status === 'occupied' && baseValue(u) <= 0 ? 'Isento de aluguel' + (u.hasGarage ? ' (c/ garagem)' : '') : `${brl(baseValue(u))}/mês${u.hasGarage ? ' (c/ garagem)' : ''} • paga todo dia ${pad(u.dueDay || 10)}`}</div>
       ${u.status === 'occupied' ? `<div class="small muted">Contrato até ${br(u.contractEnd)}${cd !== null && cd <= 60 ? ` • <b style="color:${cd < 0 ? 'var(--red)' : 'var(--amber)'}">${cd < 0 ? 'vencido' : cd + ' dias'}</b>` : ''}</div>` : ''}
       ${nextOpen ? `<div class="small" style="margin-top:6px">Em aberto: ${monthLabel(nextOpen.month)} — <b>${brl(nextOpen.amount.total)}</b></div>` : ''}
       ${u.wifiName || u.energyUC ? `<div class="tiny muted" style="margin-top:6px">${u.wifiName ? 'Wi-Fi: ' + esc(u.wifiName) : ''}${u.wifiName && u.energyUC ? ' • ' : ''}${u.energyUC ? 'UC ' + esc(u.energyUC) : ''}</div>` : ''}
@@ -525,6 +526,8 @@ function unitDataTab(u) {
         <div><label class="f">Nome da rede Wi-Fi</label><input class="i" name="wifiName" value="${esc(u.wifiName || '')}"></div>
         <div><label class="f">Senha do Wi-Fi</label><input class="i" name="wifiPass" value="${esc(u.wifiPass || '')}"></div>
         <div><label class="f">UC de energia (unidade consumidora)</label><input class="i" name="energyUC" value="${esc(u.energyUC || '')}" placeholder="nº que aparece na conta de luz"></div>
+        <div><label class="f">IP do roteador <span class="tiny">(só administração)</span></label><input class="i" name="routerIp" value="${esc(u.routerIp || '')}"></div>
+        <div><label class="f">Senha do roteador <span class="tiny">(só administração)</span></label><input class="i" name="routerPass" value="${esc(u.routerPass || '')}"></div>
       </div>
     </div>
     <hr class="s">
@@ -557,9 +560,12 @@ function unitDataTab(u) {
       email: emailKey(f.get('email')), contractStart: f.get('contractStart') || '', contractEnd: f.get('contractEnd') || '',
       notes: String(f.get('notes') || ''),
       contractUrl: String(f.get('contractUrl') || '').trim(),
-      wifiName: String(f.get('wifiName') || '').trim(), wifiPass: String(f.get('wifiPass') || '').trim(), energyUC: String(f.get('energyUC') || '').trim()
+      wifiName: String(f.get('wifiName') || '').trim(), wifiPass: String(f.get('wifiPass') || '').trim(), energyUC: String(f.get('energyUC') || '').trim(),
+      routerIp: String(f.get('routerIp') || '').trim(), routerPass: String(f.get('routerPass') || '').trim()
     };
-    if (patch.status === 'occupied' && (!patch.tenantName || !patch.contractStart)) { toast('Para kitnet alugada, preencha o nome e a data de início do contrato.'); return; }
+    const pBase = Number(patch.rent || 0) + (patch.hasGarage ? Number(patch.garageFee || 0) : 0);
+    if (patch.status === 'occupied' && !patch.tenantName) { toast('Para kitnet ocupada, preencha o nome do morador.'); return; }
+    if (patch.status === 'occupied' && pBase > 0 && !patch.contractStart) { toast('Preencha a data de início do contrato.'); return; }
     const ph = onlyDigits(patch.phone).replace(/^55(?=\d{10,11}$)/, '');
     if (patch.phone && !(ph.length === 10 || ph.length === 11)) { toast('WhatsApp com DDD, ex.: 65 99999-9999.'); return; }
     if (patch.contractUrl && !/^https:\/\//i.test(patch.contractUrl)) { toast('O link do contrato precisa começar com https://'); return; }
@@ -742,7 +748,7 @@ function renderTenant() {
 
   app.innerHTML = `<div class="stack">
     <div class="card"><div class="row between"><div><div class="tiny muted">Olá,</div><h2 style="margin:0">${esc(u.tenantName)}</h2>
-      <div class="small muted">Kitnet ${esc(u.number)} • vencimento todo dia ${pad(u.dueDay)} • ${brl(baseValue(u))}/mês${u.hasGarage ? ' (com garagem)' : ''}</div></div>${statusPill(st.key)}</div></div>
+      <div class="small muted">Kitnet ${esc(u.number)} • ${st.key === 'exempt' ? 'isento de aluguel' : `vencimento todo dia ${pad(u.dueDay)} • ${brl(baseValue(u))}/mês`}${u.hasGarage ? ' (com garagem)' : ''}</div></div>${statusPill(st.key)}</div></div>
     <div class="grid g2">
       <div class="card stack">
         <h2>${next ? (next.status === 'overdue' ? 'Aluguel em atraso' : 'Próximo aluguel') : 'Pagamentos'}</h2>
@@ -755,7 +761,7 @@ function renderTenant() {
               <div class="tiny muted" style="margin-top:4px">Chave ${esc(cfg.pixType)}: ${esc(cfg.pixKey)} • Titular: ${esc(cfg.pixHolder)}</div></div>` : ''}
           ${cfg.whatsAdmin ? `<a class="btn wa" target="_blank" rel="noopener" href="${esc(waLink(cfg.whatsAdmin, avisar))}">Já paguei — enviar comprovante</a>` : ''}
           ${st.open.length > 1 ? `<div class="notice n-warn small">Você tem ${st.open.length} mensalidades em aberto: ${st.open.map(o => monthLabel(o.month)).join(', ')}.</div>` : ''}
-        ` : `<div class="notice n-ok">Tudo em dia! Obrigado. ✅</div>`}
+        ` : st.key === 'exempt' ? `<div class="notice n-ok">Você está isento de aluguel. Não há nada a pagar. ✅</div>` : `<div class="notice n-ok">Tudo em dia! Obrigado. ✅</div>`}
       </div>
       <div class="card stack">
         <h2>Meu contrato</h2>
