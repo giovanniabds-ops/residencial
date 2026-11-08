@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Residencial Boa Esperança — Gestão de Aluguéis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<meta name="theme-color" content="#0b3d2e">
+<style>
+:root{
+  --bg:#f6f4ef;--card:#ffffff;--ink:#1c2321;--muted:#6b7570;--line:#e6e2d9;
+  --green:#0f6b4f;--green-2:#e3f1ea;--terra:#b4532a;--terra-2:#fbeee6;
+  --red:#b42318;--red-2:#fdecea;--amber:#9a6200;--amber-2:#fff4dc;--blue:#1f4e8c;--blue-2:#e8eff9;
+  --radius:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.45}
+a{color:var(--green)}
+button,input,select,textarea{font:inherit;color:inherit}
+.wrap{max-width:1120px;margin:0 auto;padding:16px}
+header.top{background:linear-gradient(120deg,#0b3d2e,#123b31 55%,#5a2a14);color:#fff;position:relative;overflow:hidden}
+header.top .hero-img{position:absolute;inset:0;background-size:cover;background-position:center;opacity:.4}
+header.top .wrap{position:relative;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding-top:18px;padding-bottom:18px}
+.brand h1{margin:0;font-size:20px;font-weight:800;letter-spacing:-.01em}
+.brand p{margin:2px 0 0;font-size:13px;opacity:.85}
+nav.tabs{display:flex;gap:6px;flex-wrap:wrap}
+nav.tabs a{color:#fff;text-decoration:none;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.12);font-weight:600;font-size:14px}
+nav.tabs a.on{background:#fff;color:#0b3d2e}
+.grid{display:grid;gap:12px}
+.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:900px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.g4,.g3,.g2{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+.card h2{font-size:16px;margin:0 0 10px;font-weight:700}
+.card h3{font-size:14px;margin:0 0 6px;font-weight:700}
+.kpi .lbl{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.kpi .val{font-size:24px;font-weight:800;margin-top:4px}
+.kpi .sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+.muted{color:var(--muted)}.small{font-size:13px}.tiny{font-size:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.between{justify-content:space-between}
+.stack>*+*{margin-top:12px}
+.btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;font-weight:600;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--ink)}
+.btn:hover{border-color:#cfc9bc}
+.btn.pri{background:var(--green);border-color:var(--green);color:#fff}
+.btn.terra{background:var(--terra);border-color:var(--terra);color:#fff}
+.btn.wa{background:#1f8f4e;border-color:#1f8f4e;color:#fff}
+.btn.danger{color:var(--red);border-color:#f0c9c4}
+.btn.sm{padding:5px 9px;font-size:13px;border-radius:8px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.p-paid{background:var(--green-2);color:var(--green)}
+.p-over{background:var(--red-2);color:var(--red)}
+.p-soon{background:var(--amber-2);color:var(--amber)}
+.p-pend{background:var(--blue-2);color:var(--blue)}
+.p-vac{background:#eee;color:#555}
+.unit{cursor:pointer;transition:transform .12s, box-shadow .12s}
+.unit:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.06)}
+.unit .num{font-size:22px;font-weight:800}
+.list{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.list .it{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 12px;border-top:1px solid var(--line);flex-wrap:wrap;background:#fff}
+.list .it:first-child{border-top:0}
+label.f{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:4px}
+input.i,select.i,textarea.i{width:100%;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff}
+input.i:focus,select.i:focus,textarea.i:focus{outline:2px solid #9fd3bd;border-color:#9fd3bd}
+.modal-bg{position:fixed;inset:0;background:rgba(15,23,20,.5);display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto;z-index:50}
+.modal{background:#fff;border-radius:16px;max-width:760px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal .mh{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)}
+.modal .mb{padding:16px}
+.mtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);padding:0 12px}
+.mtabs button{border:0;background:none;padding:10px 10px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+.mtabs button.on{color:var(--green);border-bottom-color:var(--green)}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#1c2321;color:#fff;padding:10px 16px;border-radius:12px;font-weight:600;z-index:60;max-width:92vw}
+.notice{border-radius:12px;padding:12px 14px;font-size:14px}
+.n-info{background:var(--blue-2);color:#163a69}
+.n-warn{background:var(--amber-2);color:#6b4500}
+.n-bad{background:var(--red-2);color:#7a1a12}
+.n-ok{background:var(--green-2);color:#0b4a37}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;word-break:break-all}
+.bar{height:8px;background:#eee;border-radius:99px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--green)}
+.photos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.photos .ph{aspect-ratio:4/3;border-radius:10px;background:#ddd center/cover no-repeat;position:relative;border:1px solid var(--line)}
+.center{text-align:center}
+.big{font-size:30px;font-weight:800}
+hr.s{border:0;border-top:1px solid var(--line);margin:14px 0}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="hero-img" id="heroImg"></div>
+  <div class="wrap">
+    <div class="brand">
+      <h1>Residencial Boa Esperança</h1>
+      <p id="brandSub">Gestão de aluguéis • 15 kitnets • Cuiabá/MT</p>
+    </div>
+    <div class="row"><nav class="tabs" id="tabs"></nav><div id="who" class="row tiny" style="color:#fff;opacity:.9"></div></div>
+  </div>
+</header>
+<main class="wrap" id="app"><div class="card center muted">Carregando…</div></main>
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>
+
+<script>
+/* ============ Utilidades ============ */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const brl = (n) => Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const r2 = (n) => Math.round(Number(n || 0) * 100) / 100;
+const pad = (n) => String(n).padStart(2, '0');
+const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseYmd = (s) => { if (!s) return null; const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const br = (s) => { if (!s) return '—'; const [y, m, d] = s.split('-'); return d ? `${d}/${m}/${y}` : `${m}/${y}`; };
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const monthLabel = (mk) => { const [y, m] = mk.split('-').map(Number); return `${MESES[m - 1]}/${y}`; };
+const todayD = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+const daysBetween = (a, b) => Math.round((b - a) / 86400000);
+const monthKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+const nextMonth = (mk) => { const [y, m] = mk.split('-').map(Number); return m === 12 ? `${y + 1}-01` : `${y}-${pad(m + 1)}`; };
+const onlyDigits = (s) => String(s || '').replace(/\D/g, '');
+const waLink = (phone, text) => { let d = onlyDigits(phone); if (d && !d.startsWith('55')) d = '55' + d; return `https://wa.me/${d}?text=${encodeURIComponent(text)}`; };
+const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || '';
+
+function toast(msg) {
+  const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
+  $('#toastRoot').replaceChildren(el); setTimeout(() => el.remove(), 3500);
+}
+async function copyText(text, msg = 'Copiado!') {
+  try { await navigator.clipboard.writeText(text); toast(msg); }
+  catch { openModal('Copiar', `<p class="small muted">Selecione e copie o texto abaixo:</p><textarea class="i mono" rows="6" readonly>${esc(text)}</textarea>`); }
+}
+
+/* ============ PIX (BR Code do Banco Central) ============ */
+const pixTxt = (t, max) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9 ]/g, '').toUpperCase().trim().slice(0, max);
+function pixKeyNorm(key, type) {
+  const raw = String(key || '').trim();
+  if (type === 'Celular') { const d = onlyDigits(raw); return d.startsWith('55') && d.length >= 12 ? '+' + d : '+55' + d; }
+  if (type === 'CPF/CNPJ') return onlyDigits(raw);
+  if (type === 'E-mail') return raw.toLowerCase();
+  return raw;
+}
+function crc16(p) { let c = 0xffff; for (let i = 0; i < p.length; i++) { c ^= p.charCodeAt(i) << 8; for (let j = 0; j < 8; j++) { c = c & 0x8000 ? (c << 1) ^ 0x1021 : c << 1; c &= 0xffff; } } return c.toString(16).toUpperCase().padStart(4, '0'); }
+const emv = (id, v) => `${id}${pad(v.length)}${v}`;
+function pixPayload(cfg, amount, txid) {
+  const ma = emv('00', 'br.gov.bcb.pix') + emv('01', pixKeyNorm(cfg.pixKey, cfg.pixType));
+  const tx = pixTxt(txid, 25).replace(/ /g, '') || '***';
+  const p = emv('00', '01') + emv('26', ma) + emv('52', '0000') + emv('53', '986') + emv('54', Number(amount).toFixed(2)) +
+    emv('58', 'BR') + emv('59', pixTxt(cfg.pixHolder, 25) || 'RESIDENCIAL') + emv('60', 'CUIABA') + emv('62', emv('05', tx)) + '6304';
+  return p + crc16(p);
+}
+
+/* ============ Regras de cobrança ============ */
+const DEFAULT_CFG = {
+  pixKey: '65992225780', pixType: 'Celular', pixHolder: 'Sonia Maria Zanutto da Silva', whatsAdmin: '65 99216-4498', finePct: 2, interestMonthPct: 1,
+  trackingStart: monthKey(new Date()), reviewUrl: 'https://search.google.com/local/writereview?placeid=ChIJQbNh5wexnZMR71EdzmAvilE',
+  mapsUrl: 'https://maps.google.com/maps?cid=5875560756679627247', address: 'Rua Doutor Luís Felipe Sabóia Ribeiro, 493 - Boa Esperança, Cuiabá - MT, 78068-405'
+};
+const baseValue = (u) => r2(Number(u.rent || 0) + (u.hasGarage ? Number(u.garageFee || 0) : 0));
+function dueDateFor(u, mk) {
+  const [y, m] = mk.split('-').map(Number); const last = new Date(y, m, 0).getDate();
+  return new Date(y, m - 1, Math.min(Number(u.dueDay || 10), last));
+}
+function amountFor(u, due, payDate, cfg) {
+  const base = baseValue(u); const late = Math.max(0, daysBetween(due, payDate));
+  if (late <= 0) return { base, fine: 0, interest: 0, total: base, late: 0 };
+  const fine = r2(base * Number(cfg.finePct || 0) / 100);
+  const interest = r2(base * Number(cfg.interestMonthPct || 0) / 100 / 30 * late);
+  return { base, fine, interest, total: r2(base + fine + interest), late };
+}
+/* Lista os meses cobráveis da kitnet e a situação de cada um */
+function chargesFor(u, cfg) {
+  if (!u || u.status !== 'occupied' || !u.contractStart) return [];
+  const today = todayD(); const cur = monthKey(today);
+  let mk = [String(u.contractStart).slice(0, 7), cfg.trackingStart || cur].sort()[1];
+  const out = []; let guard = 0;
+  while (mk <= cur && guard++ < 60) {
+    const due = dueDateFor(u, mk);
+    const paid = (u.payments || []).find(p => p.month === mk && p.status === 'paid');
+    if (paid) out.push({ month: mk, due, status: 'paid', payment: paid });
+    else {
+      const a = amountFor(u, due, today, cfg);
+      const dleft = daysBetween(today, due);
+      out.push({ month: mk, due, status: dleft < 0 ? 'overdue' : (dleft <= 3 ? 'soon' : 'pending'), daysLeft: dleft, amount: a });
+    }
+    mk = nextMonth(mk);
+  }
+  return out;
+}
+function unitState(u, cfg) {
+  if (!u || u.status !== 'occupied') return { key: 'vacant', open: [], charges: [] };
+  const charges = chargesFor(u, cfg); const open = charges.filter(c => c.status !== 'paid');
+  let key = 'paid';
+  if (open.some(c => c.status === 'overdue')) key = 'overdue';
+  else if (open.some(c => c.status === 'soon')) key = 'soon';
+  else if (open.length) key = 'pending';
+  return { key, open, charges };
+}
+const contractDaysLeft = (u) => u.contractEnd ? daysBetween(todayD(), parseYmd(u.contractEnd)) : null;
+function statusPill(key, extra = '') {
+  const m = { paid: ['p-paid', 'Em dia'], overdue: ['p-over', 'Em atraso'], soon: ['p-soon', 'Vence em breve'], pending: ['p-pend', 'A vencer'], vacant: ['p-vac', 'Vaga'] }[key];
+  return `<span class="pill ${m[0]}">${m[1]}${extra ? ' ' + esc(extra) : ''}</span>`;
+}
+
+/* ============ Mensagens ============ */
+function msgFor(type, u, cfg, charge) {
+  const n = firstName(u.tenantName);
+  const pay = cfg.pixKey ? `\n💳 PIX (${cfg.pixType}): ${cfg.pixKey}\nFavorecido: ${cfg.pixHolder}\nO código PIX com o valor certo também está no seu Portal do Inquilino.` : '';
+  const portal = `\nSeu contrato, vencimentos e recibos ficam no Portal do Inquilino.`;
+  if (type === 'reminder' && charge) return `Olá, ${n}! Tudo bem?\nLembrete do Residencial Boa Esperança: o aluguel da Kitnet ${u.number} referente a ${monthLabel(charge.month)} vence em ${br(ymd(charge.due))}.\nValor: ${brl(charge.amount.total)} (água e internet inclusas).${pay}${portal}`;
+  if (type === 'overdue' && charge) return `Olá, ${n}! Tudo bem?\nAqui é da administração do Residencial Boa Esperança. O aluguel da Kitnet ${u.number} de ${monthLabel(charge.month)} venceu em ${br(ymd(charge.due))} e ainda consta em aberto.\nValor atualizado hoje: ${brl(charge.amount.total)} (aluguel ${brl(charge.amount.base)} + multa ${brl(charge.amount.fine)} + juros ${brl(charge.amount.interest)}).${pay}\nSe já pagou, pode desconsiderar e nos enviar o comprovante. Obrigado!`;
+  if (type === 'renewal') return `Olá, ${n}! Tudo bem?\nO contrato da Kitnet ${u.number} no Residencial Boa Esperança termina em ${br(u.contractEnd)}. Você quer renovar por mais 12 meses? Podemos combinar os detalhes por aqui.`;
+  if (type === 'review') return `Olá, ${n}! Obrigado por manter o aluguel em dia 🙏\nSe estiver gostando de morar no Residencial Boa Esperança, sua avaliação no Google ajuda muito outros estudantes a nos encontrarem:${cfg.reviewUrl ? '\n' + cfg.reviewUrl : ''}`;
+  return `Olá, ${n}! Aqui é da administração do Residencial Boa Esperança (Kitnet ${u.number}).`;
+}
+
+/* ============ Recibo ============ */
+function receiptText(u, p, cfg) {
+  return `RECIBO DE ALUGUEL Nº ${p.receiptNo}\nResidencial Boa Esperança${cfg.address ? ' — ' + cfg.address : ''}\n\nRecebemos de ${u.tenantName}${u.cpf ? ', CPF ' + u.cpf : ''}, a importância de ${brl(p.amount)} referente ao aluguel da Kitnet ${u.number}, mês de ${monthLabel(p.month)} (vencimento ${br(p.dueDate)}), pago em ${br(p.paidDate)} via ${p.method || 'PIX'}.` +
+    (p.fine || p.interest ? `\nComposição: aluguel ${brl(p.base)} + multa ${brl(p.fine)} + juros ${brl(p.interest)}.` : '') +
+    `\nÁgua e internet inclusas pelo contrato.\n\nRecebedor(a): ${cfg.pixHolder || 'Administração do Residencial Boa Esperança'}`;
+}
+async function downloadReceipt(u, p, cfg) {
+  const text = receiptText(u, p, cfg);
+  if (!window.jspdf) { openReceipt(u, p, cfg); return; }
+  try {
+    const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    doc.setFillColor(15, 107, 79); doc.rect(0, 0, 595, 70, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+    doc.text('Residencial Boa Esperança', 40, 40); doc.setFontSize(11); doc.setFont('helvetica', 'normal');
+    doc.text('Recibo de aluguel', 40, 58);
+    doc.setTextColor(28, 35, 33); doc.setFontSize(12);
+    const lines = doc.splitTextToSize(text, 515); doc.text(lines, 40, 110);
+    const y = 110 + lines.length * 16 + 50;
+    doc.line(40, y, 300, y); doc.setFontSize(10); doc.text(cfg.pixHolder || 'Administração', 40, y + 14);
+    doc.text(`Emitido em ${br(ymd(new Date()))}`, 40, y + 28);
+    doc.save(`Recibo_Kitnet${u.number}_${p.month}.pdf`);
+  } catch (e) { openReceipt(u, p, cfg); }
+}
+function openReceipt(u, p, cfg) {
+  openModal(`Recibo nº ${esc(p.receiptNo)}`, `
+    <div class="card" style="white-space:pre-wrap">${esc(receiptText(u, p, cfg))}</div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn pri" id="rcCopy">Copiar texto do recibo</button>
+      <button class="btn" id="rcPdf">Baixar PDF</button>
+    </div>`);
+  $('#rcCopy').onclick = () => copyText(receiptText(u, p, cfg), 'Recibo copiado');
+  $('#rcPdf').onclick = () => downloadReceipt(u, p, cfg);
+}
+
+/* ============ Modal ============ */
+function openModal(title, html, wide) {
+  $('#modalRoot').innerHTML = `<div class="modal-bg" id="mbg"><div class="modal" ${wide ? 'style="max-width:900px"' : ''}>
+    <div class="mh"><strong>${title}</strong><button class="btn sm" id="mClose">Fechar</button></div>
+    <div class="mb" id="mBody">${html}</div></div></div>`;
+  $('#mClose').onclick = closeModal;
+  $('#mbg').onclick = (e) => { if (e.target.id === 'mbg') closeModal(); };
+}
+function closeModal() { $('#modalRoot').innerHTML = ''; S.openUnit = null; }
+
+/* ============ Estado ============ */
+const S = { db: null, auth: null, me: null, isAdmin: false, isOwner: false, admins: [], cfg: { ...DEFAULT_CFG }, cfgExists: false,
+  units: {}, portal: null, loaded: false, error: '', openUnit: null, unitTab: 'dados' };
+
+function photoUrl(i) { return `img/foto${i + 1}.jpg`; }
+function paintHero() {
+  const u = photoUrl(0); $('#heroImg').style.backgroundImage = u ? `url("${u}")` : '';
+}
+
+/* ============ Firebase ============ */
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyBpj5YRChsAV9hRNN_Fn92GfzJSComN8Wg',
+  authDomain: 'residencial-boa-esperanca.firebaseapp.com',
+  projectId: 'residencial-boa-esperanca',
+  storageBucket: 'residencial-boa-esperanca.firebasestorage.app',
+  messagingSenderId: '156199361919',
+  appId: '1:156199361919:web:dcbc0c598e91c1671f4e4a'
+};
+const OWNER_EMAIL = 'giovanni.abds@gmail.com';
+let unsubs = [];
+const emailKey = (e) => String(e || '').trim().toLowerCase();
+
+/* ============ Inicialização ============ */
+async function init() {
+  if (!window.firebase) { $('#app').innerHTML = `<div class="notice n-bad">Não foi possível carregar o sistema. Verifique a internet e recarregue a página.</div>`; return; }
+  firebase.initializeApp(FIREBASE_CONFIG);
+  S.auth = firebase.auth(); S.db = firebase.firestore();
+  S.auth.languageCode = 'pt';
+  // Conclusão do login pelo link enviado por e-mail
+  if (S.auth.isSignInWithEmailLink(location.href)) {
+    let email = ''; try { email = localStorage.getItem('rbe-login-email') || ''; } catch {}
+    if (!email) { renderEmailConfirm(); }
+    else await finishEmailLink(email);
+  }
+  try { await S.auth.getRedirectResult(); } catch (e) { if (e && e.code !== 'auth/no-auth-event') toast(loginError(e)); }
+  S.auth.onAuthStateChanged(onUser);
+  window.addEventListener('hashchange', render);
+}
+async function finishEmailLink(email) {
+  try { await S.auth.signInWithEmailLink(email, location.href); try { localStorage.removeItem('rbe-login-email'); } catch {}
+    history.replaceState(null, '', location.pathname); }
+  catch (e) { toast(loginError(e)); history.replaceState(null, '', location.pathname); }
+}
+function renderEmailConfirm() {
+  $('#app').innerHTML = `<div class="card stack" style="max-width:460px;margin:20px auto"><h2>Confirme seu e-mail</h2>
+    <p class="small muted" style="margin:0">Digite o mesmo e-mail para o qual o link de acesso foi enviado.</p>
+    <input class="i" id="cfEmail" type="email" placeholder="seu@email.com"><button class="btn pri" id="cfGo">Entrar</button></div>`;
+  $('#cfGo').onclick = () => { const e = emailKey($('#cfEmail').value); if (e) finishEmailLink(e); };
+}
+function loginError(e) {
+  const c = e && e.code || '';
+  if (c.includes('popup-closed') || c.includes('cancelled-popup')) return 'Login cancelado.';
+  if (c.includes('invalid-action-code') || c.includes('expired')) return 'Este link de acesso expirou ou já foi usado. Peça um novo.';
+  if (c.includes('invalid-email')) return 'E-mail inválido.';
+  if (c.includes('unauthorized-domain')) return 'Este endereço ainda não foi autorizado no Firebase.';
+  if (c.includes('too-many-requests') || c.includes('quota')) return 'Muitas tentativas. Aguarde alguns minutos.';
+  return 'Não foi possível entrar (' + (c || 'erro') + ').';
+}
+async function onUser(user) {
+  unsubs.forEach(f => { try { f(); } catch {} }); unsubs = [];
+  S.loaded = false; S.units = {}; S.portal = null; S.error = '';
+  if (!user) { S.me = null; S.isAdmin = false; S.isOwner = false; renderWho(); renderLogin(); return; }
+  S.me = emailKey(user.email); S.isOwner = S.me === OWNER_EMAIL;
+  S.isAdmin = S.isOwner;
+  if (!S.isAdmin) { try { S.isAdmin = (await S.db.doc('admins/' + S.me).get()).exists; } catch { S.isAdmin = false; } }
+  renderWho(); render();
+  const timer = setTimeout(() => { if (!S.loaded) { S.error = 'Os dados ainda não carregaram. Verifique a conexão.'; S.loaded = true; render(); } }, 10000);
+  unsubs.push(S.db.doc('config/main').onSnapshot(snap => {
+    S.cfg = { ...DEFAULT_CFG, ...(snap.exists ? snap.data() : {}) }; S.cfgExists = snap.exists; render();
+  }, () => {}));
+  if (S.isAdmin) {
+    unsubs.push(S.db.collection('units').onSnapshot(snap => {
+      const u = {}; snap.docs.forEach(d => { u[d.id] = { id: d.id, ...d.data() }; });
+      S.units = u; clearTimeout(timer); S.loaded = true; S.error = ''; render();
+    }, (e) => { clearTimeout(timer); S.loaded = true; S.error = 'Não foi possível ler os dados (' + (e.code || 'erro') + ').'; render(); }));
+    if (S.isOwner) unsubs.push(S.db.collection('admins').onSnapshot(snap => { S.admins = snap.docs.map(d => d.id); render(); }, () => {}));
+  } else {
+    unsubs.push(S.db.doc('portal/' + S.me).onSnapshot(snap => {
+      S.portal = snap.exists ? snap.data() : null; clearTimeout(timer); S.loaded = true; render();
+    }, () => { clearTimeout(timer); S.portal = null; S.loaded = true; render(); }));
+  }
+}
+function renderWho() {
+  const w = $('#who');
+  if (!S.me) { w.innerHTML = ''; return; }
+  w.innerHTML = `<span>${esc(S.me)}</span><button class="btn sm" id="logout" style="background:rgba(255,255,255,.15);color:#fff;border-color:transparent">Sair</button>`;
+  $('#logout').onclick = () => S.auth.signOut();
+}
+function renderLogin() {
+  $('#tabs').innerHTML = ''; $('#brandSub').textContent = 'Gestão de aluguéis • Portal do Inquilino';
+  $('#app').innerHTML = `<div class="card stack" style="max-width:460px;margin:20px auto">
+    <h2 style="margin:0">Entrar</h2>
+    <p class="small muted" style="margin:0">Inquilinos: use o mesmo e-mail que você informou à administração.</p>
+    <button class="btn pri" id="gLogin" style="justify-content:center;padding:12px">Entrar com Google (Gmail)</button>
+    <div class="center tiny muted">ou receba um link de acesso no seu e-mail</div>
+    <div class="row"><input class="i" id="lkEmail" type="email" placeholder="seu@email.com" style="flex:1"><button class="btn" id="lkSend">Enviar link</button></div>
+    <div id="lkMsg"></div>
+  </div>`;
+  $('#gLogin').onclick = async () => {
+    const prov = new firebase.auth.GoogleAuthProvider(); prov.setCustomParameters({ prompt: 'select_account' });
+    try { await S.auth.signInWithPopup(prov); }
+    catch (e) { if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment')) S.auth.signInWithRedirect(prov); else toast(loginError(e)); }
+  };
+  $('#lkSend').onclick = async () => {
+    const email = emailKey($('#lkEmail').value); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('Digite um e-mail válido.');
+    try {
+      await S.auth.sendSignInLinkToEmail(email, { url: location.origin + location.pathname, handleCodeInApp: true });
+      try { localStorage.setItem('rbe-login-email', email); } catch {}
+      $('#lkMsg').innerHTML = `<div class="notice n-ok small">Link enviado para <b>${esc(email)}</b>. Abra o e-mail neste mesmo aparelho e toque no link. Se não aparecer, olhe a caixa de spam.</div>`;
+    } catch (e) { toast(loginError(e)); }
+  };
+}
+
+/* ============ Render principal ============ */
+function render() {
+  if (!S.me) return;
+  const tabs = $('#tabs');
+  if (S.isAdmin) {
+    const h = (location.hash || '#painel').slice(1);
+    const view = ['painel', 'kitnets', 'ajustes'].includes(h) ? h : 'painel';
+    tabs.innerHTML = [['painel', 'Painel'], ['kitnets', 'Kitnets'], ['ajustes', 'Ajustes']].map(([k, l]) => `<a href="#${k}" class="${k === view ? 'on' : ''}">${l}</a>`).join('');
+    $('#brandSub').textContent = 'Área da administração • 15 kitnets • Cuiabá/MT';
+    if (!S.loaded) { $('#app').innerHTML = `<div class="card center muted">Carregando…</div>`; return; }
+    if (S.error) { $('#app').innerHTML = `<div class="notice n-warn">${esc(S.error)}</div>`; return; }
+    if (view === 'painel') renderDashboard(); else if (view === 'kitnets') renderUnits(); else renderSettings();
+    if (S.openUnit && S.units[S.openUnit]) renderUnitModal(true);
+  } else {
+    tabs.innerHTML = '';
+    $('#brandSub').textContent = 'Portal do Inquilino';
+    renderTenant();
+  }
+}
+
+const unitList = () => Object.values(S.units).sort((a, b) => String(a.number).localeCompare(String(b.number)));
+
+/* ---------- Painel (admin) ---------- */
+function renderDashboard() {
+  const cfg = S.cfg; const list = unitList(); const today = todayD(); const cur = monthKey(today);
+  if (!list.length) {
+    $('#app').innerHTML = `<div class="card stack"><h2 style="margin:0">Primeiro acesso</h2><p class="muted" style="margin:0">Crie as 15 kitnets (todas vagas, aluguel de R$ 1.200) e os ajustes iniciais (PIX da Sonia, WhatsApp e links do Google). Depois é só preencher cada uma.</p><div><button class="btn pri" id="seed">Criar as 15 kitnets</button></div></div>`;
+    $('#seed').onclick = async () => {
+      $('#seed').disabled = true;
+      try { const b = S.db.batch();
+        for (let n = 1; n <= 15; n++) b.set(S.db.doc('units/k' + pad(n)), { number: pad(n), status: 'vacant', rent: 1200, hasGarage: false, garageFee: 100, dueDay: 10, payments: [] });
+        if (!S.cfgExists) b.set(S.db.doc('config/main'), { ...DEFAULT_CFG });
+        await b.commit(); toast('Kitnets criadas.'); } catch (e) { toast('Não foi possível criar (' + (e.code || 'erro') + ').'); $('#seed').disabled = false; }
+    };
+    return;
+  }
+  const occ = list.filter(u => u.status === 'occupied');
+  let expected = 0, received = 0, overdueSum = 0, overdueN = 0;
+  const actions = [];
+  occ.forEach(u => {
+    const st = unitState(u, cfg);
+    const c = st.charges.find(x => x.month === cur);
+    if (c) { expected += baseValue(u); if (c.status === 'paid') received += Number(c.payment.amount || 0); }
+    st.open.forEach(o => {
+      if (o.status === 'overdue') { overdueSum += o.amount.total; overdueN++; actions.push({ u, o, kind: 'overdue', sort: o.daysLeft }); }
+      else if (o.status === 'soon') actions.push({ u, o, kind: 'soon', sort: 100 + o.daysLeft });
+    });
+    const cd = contractDaysLeft(u);
+    if (cd !== null && cd <= 60) actions.push({ u, kind: 'renewal', cd, sort: 200 + cd });
+    if (!u.email) actions.push({ u, kind: 'link', sort: 400 });
+  });
+  actions.sort((a, b) => a.sort - b.sort);
+  const pct = expected ? Math.round(received / expected * 100) : 0;
+  const pendingCfg = !cfg.pixKey || !cfg.whatsAdmin;
+
+  $('#app').innerHTML = `
+  <div class="stack">
+    ${pendingCfg ? `<div class="notice n-warn">Complete os <a href="#ajustes">Ajustes</a> (PIX, WhatsApp da administração, multa e juros) antes de enviar cobranças.</div>` : ''}
+    <div class="grid g4">
+      <div class="card kpi"><div class="lbl">Ocupação</div><div class="val">${occ.length}/${list.length}</div><div class="sub">${list.length - occ.length} vaga(s)</div></div>
+      <div class="card kpi"><div class="lbl">Previsto — ${monthLabel(cur)}</div><div class="val">${brl(expected)}</div><div class="sub">aluguel + garagem</div></div>
+      <div class="card kpi"><div class="lbl">Recebido no mês</div><div class="val" style="color:var(--green)">${brl(received)}</div><div class="bar" style="margin-top:6px"><i style="width:${pct}%"></i></div></div>
+      <div class="card kpi"><div class="lbl">Em atraso</div><div class="val" style="color:var(--red)">${brl(overdueSum)}</div><div class="sub">${overdueN} mensalidade(s), já com multa e juros</div></div>
+    </div>
+    <div class="card">
+      <div class="row between"><h2 style="margin:0">Cobranças e pendências de hoje</h2><span class="tiny muted">${br(ymd(today))}</span></div>
+      <p class="small muted" style="margin:4px 0 12px">Atrasos, vencimentos nos próximos 3 dias, contratos terminando em até 60 dias e inquilinos sem acesso ao portal.</p>
+      ${actions.length ? `<div class="list">${actions.map(actionRow).join('')}</div>` : `<div class="notice n-ok">Nada pendente hoje. Todos em dia. ✅</div>`}
+    </div>
+  </div>`;
+  $('#app').querySelectorAll('[data-open]').forEach(b => b.onclick = () => openUnit(b.dataset.open, b.dataset.tab || 'dados'));
+}
+function actionRow(a) {
+  const u = a.u; const cfg = S.cfg; let left = '', right = '';
+  const who = `<strong>Kitnet ${esc(u.number)}</strong> — ${esc(u.tenantName || 'sem nome')}`;
+  if (a.kind === 'overdue') {
+    left = `${statusPill('overdue', `há ${-a.o.daysLeft} dia(s)`)} ${who}<div class="small muted">${monthLabel(a.o.month)} • venceu ${br(ymd(a.o.due))} • hoje ${brl(a.o.amount.total)}</div>`;
+    right = `<a class="btn wa sm" target="_blank" rel="noopener" href="${esc(waLink(u.phone, msgFor('overdue', u, cfg, a.o)))}">Cobrar no WhatsApp</a><button class="btn sm" data-open="${esc(u.id)}" data-tab="pagamentos">Registrar pagamento</button>`;
+  } else if (a.kind === 'soon') {
+    left = `${statusPill('soon', a.o.daysLeft === 0 ? 'hoje' : `em ${a.o.daysLeft} dia(s)`)} ${who}<div class="small muted">${monthLabel(a.o.month)} • vence ${br(ymd(a.o.due))} • ${brl(a.o.amount.total)}</div>`;
+    right = `<a class="btn wa sm" target="_blank" rel="noopener" href="${esc(waLink(u.phone, msgFor('reminder', u, cfg, a.o)))}">Enviar lembrete</a><button class="btn sm" data-open="${esc(u.id)}" data-tab="pagamentos">Registrar pagamento</button>`;
+  } else if (a.kind === 'renewal') {
+    left = `<span class="pill p-soon">Contrato</span> ${who}<div class="small muted">${a.cd < 0 ? 'terminou em' : 'termina em'} ${br(u.contractEnd)}${a.cd >= 0 ? ` (${a.cd} dias)` : ''}</div>`;
+    right = `<a class="btn wa sm" target="_blank" rel="noopener" href="${esc(waLink(u.phone, msgFor('renewal', u, cfg)))}">Perguntar sobre renovação</a><button class="btn sm" data-open="${esc(u.id)}">Abrir</button>`;
+  } else {
+    left = `<span class="pill p-pend">Acesso</span> ${who}<div class="small muted">Sem e-mail de acesso ao Portal do Inquilino</div>`;
+    right = `<button class="btn sm" data-open="${esc(u.id)}">Cadastrar e-mail</button>`;
+  }
+  return `<div class="it"><div>${left}</div><div class="row">${right}</div></div>`;
+}
+
+/* ---------- Kitnets (admin) ---------- */
+function renderUnits() {
+  const cfg = S.cfg;
+  $('#app').innerHTML = `<div class="grid g3">${unitList().map(u => {
+    const st = unitState(u, cfg); const cd = contractDaysLeft(u);
+    const nextOpen = st.open[0];
+    return `<div class="card unit" data-open="${esc(u.id)}">
+      <div class="row between"><div class="num">${esc(u.number)}</div>${statusPill(st.key)}</div>
+      <div style="font-weight:600;margin-top:4px">${u.status === 'occupied' ? esc(u.tenantName || 'Sem nome') : 'Disponível'}</div>
+      <div class="small muted">${brl(baseValue(u))}/mês${u.hasGarage ? ' (c/ garagem)' : ''} • paga todo dia ${pad(u.dueDay || 10)}</div>
+      ${u.status === 'occupied' ? `<div class="small muted">Contrato até ${br(u.contractEnd)}${cd !== null && cd <= 60 ? ` • <b style="color:${cd < 0 ? 'var(--red)' : 'var(--amber)'}">${cd < 0 ? 'vencido' : cd + ' dias'}</b>` : ''}</div>` : ''}
+      ${nextOpen ? `<div class="small" style="margin-top:6px">Em aberto: ${monthLabel(nextOpen.month)} — <b>${brl(nextOpen.amount.total)}</b></div>` : ''}
+      ${u.wifiName || u.energyUC ? `<div class="tiny muted" style="margin-top:6px">${u.wifiName ? 'Wi-Fi: ' + esc(u.wifiName) : ''}${u.wifiName && u.energyUC ? ' • ' : ''}${u.energyUC ? 'UC ' + esc(u.energyUC) : ''}</div>` : ''}
+      ${u.status === 'occupied' && !u.email ? `<div class="tiny" style="color:var(--blue);margin-top:6px">Sem e-mail de acesso ao portal</div>` : ''}
+    </div>`;
+  }).join('')}</div>`;
+  $('#app').querySelectorAll('[data-open]').forEach(el => el.onclick = () => openUnit(el.dataset.open));
+}
+
+function openUnit(id, tab = 'dados') { S.openUnit = id; S.unitTab = tab; renderUnitModal(false); }
+
+function renderUnitModal(isRefresh) {
+  const u = S.units[S.openUnit]; if (!u) return;
+  if (isRefresh && S.unitTab === 'dados' && $('#unitForm')) return; // não apaga o que está sendo digitado
+  const tabs = [['dados', 'Dados e contrato'], ['pagamentos', 'Pagamentos e recibos']];
+  openModal(`Kitnet ${esc(u.number)} ${u.status === 'occupied' ? '— ' + esc(u.tenantName || '') : '(vaga)'}`,
+    `<div class="mtabs" style="margin:-16px -16px 16px">${tabs.map(([k, l]) => `<button data-t="${k}" class="${k === S.unitTab ? 'on' : ''}">${l}</button>`).join('')}</div><div id="uBody"></div>`, true);
+  $('#mBody').querySelectorAll('[data-t]').forEach(b => b.onclick = () => { S.unitTab = b.dataset.t; renderUnitModal(false); });
+  if (S.unitTab === 'pagamentos') unitPayTab(u); else unitDataTab(u);
+}
+
+function unitDataTab(u) {
+  const occ = u.status === 'occupied';
+  $('#uBody').innerHTML = `
+  <form id="unitForm" class="stack">
+    <div class="card" style="background:var(--green-2);border-color:#bfe0d1">
+      <h3 style="margin-bottom:2px">Datas deste inquilino</h3>
+      <div class="tiny muted" style="margin-bottom:10px">Preencha conforme o contrato de cada um. É com essas datas que o sistema avisa quem vence, quem atrasou e quando o contrato termina.</div>
+      <div class="grid g3">
+        <div><label class="f">Data de início do contrato</label><input class="i" name="contractStart" type="date" value="${esc(u.contractStart || '')}"></div>
+        <div><label class="f">Data de término do contrato</label><input class="i" name="contractEnd" type="date" value="${esc(u.contractEnd || '')}"></div>
+        <div><label class="f">Dia do pagamento do aluguel (todo mês)</label><select class="i" name="dueDay">${Array.from({ length: 31 }, (_, i) => i + 1).map(d => `<option value="${d}" ${Number(u.dueDay ?? 10) === d ? 'selected' : ''}>Dia ${pad(d)}</option>`).join('')}</select></div>
+      </div>
+      <div class="row between" style="margin-top:6px"><div class="tiny muted">Em meses mais curtos (ex.: dia 31 em fevereiro), o vencimento passa para o último dia do mês.</div>
+        ${occ && u.contractEnd ? `<button type="button" class="btn sm" id="renew12">Renovar +12 meses</button>` : ''}</div>
+    </div>
+    <div class="grid g3">
+      <div><label class="f">Situação</label><select class="i" name="status"><option value="occupied" ${occ ? 'selected' : ''}>Alugada</option><option value="vacant" ${!occ ? 'selected' : ''}>Vaga</option></select></div>
+      <div><label class="f">Aluguel (R$)</label><input class="i" name="rent" type="number" step="0.01" min="0" value="${esc(u.rent ?? 1200)}"></div>
+      <div><label class="f">Vaga de garagem</label><select class="i" name="hasGarage"><option value="no" ${!u.hasGarage ? 'selected' : ''}>Sem garagem</option><option value="yes" ${u.hasGarage ? 'selected' : ''}>Com garagem</option></select></div>
+      <div><label class="f">Valor da garagem (R$)</label><input class="i" name="garageFee" type="number" step="0.01" min="0" value="${esc(u.garageFee ?? 100)}"></div>
+      <div><label class="f">Total mensal</label><input class="i" disabled value="${esc(brl(baseValue(u)))}"></div>
+    </div>
+    <div class="card" style="background:#fbfaf7">
+      <h3 style="margin-bottom:2px">Dados fixos da kitnet</h3>
+      <div class="tiny muted" style="margin-bottom:10px">Ficam guardados na unidade, mesmo quando o inquilino muda. O inquilino vinculado vê estes dados no portal dele.</div>
+      <div class="grid g3">
+        <div><label class="f">Nome da rede Wi-Fi</label><input class="i" name="wifiName" value="${esc(u.wifiName || '')}"></div>
+        <div><label class="f">Senha do Wi-Fi</label><input class="i" name="wifiPass" value="${esc(u.wifiPass || '')}"></div>
+        <div><label class="f">UC de energia (unidade consumidora)</label><input class="i" name="energyUC" value="${esc(u.energyUC || '')}" placeholder="nº que aparece na conta de luz"></div>
+      </div>
+    </div>
+    <hr class="s">
+    <div class="grid g2">
+      <div><label class="f">Nome completo do inquilino</label><input class="i" name="tenantName" value="${esc(u.tenantName || '')}"></div>
+      <div><label class="f">CPF</label><input class="i" name="cpf" value="${esc(u.cpf || '')}" placeholder="000.000.000-00"></div>
+      <div><label class="f">WhatsApp</label><input class="i" name="phone" value="${esc(u.phone || '')}" placeholder="65 99999-9999"></div>
+      <div><label class="f">E-mail de acesso ao portal</label><input class="i" name="email" type="email" value="${esc(u.email || '')}" placeholder="o mesmo que ele usa para entrar"></div>
+    </div>
+    <div><label class="f">Observações internas (o inquilino não vê)</label><textarea class="i" name="notes" rows="2">${esc(u.notes || '')}</textarea></div>
+    <hr class="s">
+    <div>
+      <h3>Contrato assinado (PDF)</h3>
+      <label class="f">Link do contrato no Google Drive</label>
+      <div class="row"><input class="i" name="contractUrl" value="${esc(u.contractUrl || '')}" placeholder="https://drive.google.com/file/d/..." style="flex:1">
+      ${u.contractUrl ? `<a class="btn sm" target="_blank" rel="noopener" href="${esc(u.contractUrl)}">Abrir</a>` : ''}</div>
+      <div class="tiny muted" style="margin-top:4px">No Google Drive, compartilhe o PDF só com o e-mail do inquilino (como Leitor) e cole o link aqui. Ele abre pelo portal.</div>
+    </div>
+    <div class="row between" style="margin-top:8px">
+      <div class="row">${occ ? `<button type="button" class="btn danger sm" id="endLease">Encerrar locação…</button>` : ''}</div>
+      <button class="btn pri" type="submit">Salvar</button>
+    </div>
+  </form>`;
+  $('#unitForm').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target);
+    const patch = {
+      status: f.get('status'), rent: r2(f.get('rent')), dueDay: Math.min(31, Math.max(1, Number(f.get('dueDay')) || 10)),
+      hasGarage: f.get('hasGarage') === 'yes', garageFee: r2(f.get('garageFee')),
+      tenantName: String(f.get('tenantName') || '').trim(), cpf: String(f.get('cpf') || '').trim(), phone: String(f.get('phone') || '').trim(),
+      email: emailKey(f.get('email')), contractStart: f.get('contractStart') || '', contractEnd: f.get('contractEnd') || '',
+      notes: String(f.get('notes') || ''),
+      contractUrl: String(f.get('contractUrl') || '').trim(),
+      wifiName: String(f.get('wifiName') || '').trim(), wifiPass: String(f.get('wifiPass') || '').trim(), energyUC: String(f.get('energyUC') || '').trim()
+    };
+    if (patch.status === 'occupied' && (!patch.tenantName || !patch.contractStart)) { toast('Para kitnet alugada, preencha o nome e a data de início do contrato.'); return; }
+    const ph = onlyDigits(patch.phone).replace(/^55(?=\d{10,11}$)/, '');
+    if (patch.phone && !(ph.length === 10 || ph.length === 11)) { toast('WhatsApp com DDD, ex.: 65 99999-9999.'); return; }
+    if (patch.contractUrl && !/^https:\/\//i.test(patch.contractUrl)) { toast('O link do contrato precisa começar com https://'); return; }
+    if (patch.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(patch.email)) { toast('E-mail de acesso inválido.'); return; }
+    const dup = patch.email && unitList().find(x => x.id !== u.id && x.status === 'occupied' && x.email === patch.email);
+    if (dup) { toast(`Esse e-mail já está na Kitnet ${dup.number}.`); return; }
+    if (patch.contractStart && patch.contractEnd && patch.contractEnd <= patch.contractStart) { toast('A data de término precisa ser depois da data de início.'); return; }
+    await saveUnit(u, patch); toast('Kitnet salva.');
+    $('#unitForm')?.remove(); renderUnitModal(false);
+  };
+  const rn = $('#renew12');
+  if (rn) rn.onclick = () => { const f = $('#unitForm'); const e = parseYmd(f.contractEnd.value || u.contractEnd); if (!e) return;
+    const n = new Date(e.getFullYear() + 1, e.getMonth(), e.getDate()); f.contractEnd.value = ymd(n);
+    toast('Novo término: ' + br(ymd(n)) + '. Ajuste o aluguel se houver reajuste e clique em Salvar.'); };
+  const end = $('#endLease');
+  if (end) end.onclick = () => {
+    end.outerHTML = `<span class="small">Arquivar o histórico de ${esc(u.tenantName || 'inquilino')} e deixar a kitnet vaga?</span> <button type="button" class="btn danger sm" id="endYes">Sim, encerrar</button>`;
+    $('#endYes').onclick = async () => {
+      const past = [...(u.past || []), { tenantName: u.tenantName, cpf: u.cpf, contractStart: u.contractStart, contractEnd: u.contractEnd, payments: u.payments || [], endedAt: ymd(new Date()) }].slice(-5);
+      await saveUnit(u, { status: 'vacant', tenantName: '', cpf: '', phone: '', email: '', contractStart: '', contractEnd: '', contractUrl: '', payments: [], past });
+      toast('Locação encerrada.'); $('#unitForm')?.remove(); renderUnitModal(false);
+    };
+  };
+}
+
+function unitPayTab(u) {
+  const cfg = S.cfg; const st = unitState(u, cfg);
+  const paid = (u.payments || []).filter(p => p.status === 'paid').sort((a, b) => b.month.localeCompare(a.month));
+  $('#uBody').innerHTML = u.status !== 'occupied' ? `<div class="notice n-info">Kitnet vaga. Cadastre um inquilino em "Dados e contrato".</div>` : `
+    <h3>Em aberto</h3>
+    ${st.open.length ? `<div class="list">${st.open.map(o => `<div class="it">
+      <div>${statusPill(o.status === 'overdue' ? 'overdue' : o.status === 'soon' ? 'soon' : 'pending')} <strong>${monthLabel(o.month)}</strong>
+      <div class="small muted">Vence ${br(ymd(o.due))} • hoje ${brl(o.amount.total)}${o.amount.late ? ` (multa ${brl(o.amount.fine)} + juros ${brl(o.amount.interest)})` : ''}</div></div>
+      <div class="row"><a class="btn wa sm" target="_blank" rel="noopener" href="${esc(waLink(u.phone, msgFor(o.status === 'overdue' ? 'overdue' : 'reminder', u, cfg, o)))}">WhatsApp</a>
+      <button class="btn pri sm" data-reg="${o.month}">Registrar pagamento</button></div></div>`).join('')}</div>` : `<div class="notice n-ok">Nenhuma mensalidade em aberto.</div>`}
+    <div id="regBox"></div>
+    <h3 style="margin-top:16px">Pagos (com recibo)</h3>
+    ${paid.length ? `<div class="list">${paid.map(p => `<div class="it">
+      <div><strong>${monthLabel(p.month)}</strong> — ${brl(p.amount)}<div class="small muted">Pago em ${br(p.paidDate)} via ${esc(p.method || 'PIX')} • Recibo ${esc(p.receiptNo)}</div></div>
+      <div class="row"><button class="btn sm" data-rc="${esc(p.receiptNo)}">Recibo</button><button class="btn sm danger" data-undo="${esc(p.receiptNo)}">Estornar</button></div></div>`).join('')}</div>` : `<p class="small muted">Nenhum pagamento registrado ainda.</p>`}
+    <div class="row" style="margin-top:12px"><a class="btn sm" target="_blank" rel="noopener" href="${esc(waLink(u.phone, msgFor('review', u, cfg)))}">Pedir avaliação no Google</a></div>`;
+  $('#uBody').querySelectorAll('[data-reg]').forEach(b => b.onclick = () => regForm(u, b.dataset.reg));
+  $('#uBody').querySelectorAll('[data-rc]').forEach(b => b.onclick = () => { const p = paid.find(x => x.receiptNo === b.dataset.rc); openReceiptFromAdmin(u, p); });
+  $('#uBody').querySelectorAll('[data-undo]').forEach(b => b.onclick = () => {
+    b.outerHTML = `<button class="btn sm danger" data-undoyes="${esc(b.dataset.undo)}">Confirmar estorno</button>`;
+    $(`[data-undoyes="${b.dataset.undo}"]`).onclick = async () => {
+      await saveUnit(u, { payments: (u.payments || []).filter(p => p.receiptNo !== b.dataset.undo) }); toast('Pagamento estornado.'); renderUnitModal(false);
+    };
+  });
+}
+function openReceiptFromAdmin(u, p) {
+  const keep = S.openUnit; openReceipt(u, p, S.cfg);
+  const back = document.createElement('button'); back.className = 'btn sm'; back.textContent = 'Voltar à kitnet';
+  back.onclick = () => openUnit(keep, 'pagamentos'); $('#mBody .row').appendChild(back);
+}
+function regForm(u, mk) {
+  const due = dueDateFor(u, mk); const today = ymd(new Date()); const a = amountFor(u, due, todayD(), S.cfg);
+  $('#regBox').innerHTML = `<div class="card" style="margin-top:10px;background:#fbfaf7">
+    <h3>Registrar pagamento — ${monthLabel(mk)}</h3>
+    <div class="grid g3">
+      <div><label class="f">Data do pagamento</label><input class="i" type="date" id="rgDate" value="${today}"></div>
+      <div><label class="f">Valor recebido (R$)</label><input class="i" type="number" step="0.01" id="rgAmt" value="${a.total.toFixed(2)}"></div>
+      <div><label class="f">Forma</label><select class="i" id="rgMet"><option>PIX</option><option>Dinheiro</option><option>Transferência</option></select></div>
+    </div>
+    <div class="small muted" id="rgCalc" style="margin-top:6px"></div>
+    <div class="row" style="margin-top:10px"><button class="btn pri" id="rgSave">Confirmar e gerar recibo</button></div></div>`;
+  const recalc = () => { const d = parseYmd($('#rgDate').value) || todayD(); const x = amountFor(u, due, d, S.cfg); $('#rgAmt').value = x.total.toFixed(2);
+    $('#rgCalc').textContent = x.late ? `Pago ${x.late} dia(s) após o vencimento: aluguel ${brl(x.base)} + multa ${brl(x.fine)} + juros ${brl(x.interest)}.` : `Pago até o vencimento: ${brl(x.base)}.`; };
+  $('#rgDate').onchange = recalc; recalc();
+  $('#rgSave').onclick = async () => {
+    const d = $('#rgDate').value; if (!d) return toast('Informe a data.');
+    const x = amountFor(u, due, parseYmd(d), S.cfg); const amt = r2($('#rgAmt').value);
+    const p = { month: mk, dueDate: ymd(due), paidDate: d, amount: amt, base: x.base, fine: amt >= x.total ? x.fine : 0, interest: amt >= x.total ? x.interest : 0,
+      method: $('#rgMet').value, status: 'paid', receiptNo: `REC-${mk.replace('-', '')}-K${u.number}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`, registeredAt: new Date().toISOString() };
+    const payments = [...(u.payments || []).filter(q => q.month !== mk), p];
+    await saveUnit(u, { payments }); toast('Pagamento registrado. Recibo disponível no portal do inquilino.');
+    renderUnitModal(false);
+  };
+}
+
+/* Grava a kitnet e atualiza o portal do inquilino vinculado */
+async function saveUnit(u, patch) {
+  try {
+    const ref = S.db.doc('units/' + u.id);
+    await ref.update(patch);
+    const snap = await ref.get(); const next = snap.exists ? snap.data() : { ...u, ...patch };
+    const oldKey = emailKey(u.email), newKey = next.status === 'occupied' ? emailKey(next.email) : '';
+    if (oldKey && oldKey !== newKey) await S.db.doc('portal/' + oldKey).delete();
+    if (newKey) {
+      await S.db.doc('portal/' + newKey).set({
+        unitId: u.id, number: next.number, tenantName: next.tenantName, cpf: next.cpf, status: 'occupied',
+        rent: next.rent, hasGarage: !!next.hasGarage, garageFee: next.garageFee, dueDay: next.dueDay,
+        contractStart: next.contractStart, contractEnd: next.contractEnd, contractUrl: next.contractUrl || '', wifiName: next.wifiName || '', wifiPass: next.wifiPass || '', energyUC: next.energyUC || '', payments: next.payments || [], updatedAt: new Date().toISOString()
+      });
+    }
+  } catch (e) { toast(e && e.code === 'quota_exceeded' ? 'Limite de armazenamento atingido.' : 'Não foi possível salvar. Tente de novo.'); throw e; }
+}
+
+/* ---------- Ajustes (admin) ---------- */
+function renderSettings() {
+  const c = S.cfg;
+  $('#app').innerHTML = `
+  <div class="stack">
+  <form class="card stack" id="cfgForm">
+    <h2>Recebimento</h2>
+    <div class="grid g3">
+      <div><label class="f">Tipo da chave PIX</label><select class="i" name="pixType">${['Celular', 'CPF/CNPJ', 'E-mail', 'Aleatória'].map(t => `<option ${c.pixType === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+      <div><label class="f">Chave PIX</label><input class="i" name="pixKey" value="${esc(c.pixKey)}"></div>
+      <div><label class="f">Titular da conta (nome no banco)</label><input class="i" name="pixHolder" value="${esc(c.pixHolder)}"></div>
+      <div><label class="f">WhatsApp da administração</label><input class="i" name="whatsAdmin" value="${esc(c.whatsAdmin)}" placeholder="65 99999-9999"></div>
+      <div><label class="f">Multa por atraso (%)</label><input class="i" name="finePct" type="number" step="0.1" min="0" value="${esc(c.finePct)}"></div>
+      <div><label class="f">Juros ao mês (%)</label><input class="i" name="interestMonthPct" type="number" step="0.1" min="0" value="${esc(c.interestMonthPct)}"></div>
+      <div><label class="f">Começar a cobrar a partir de</label><input class="i" name="trackingStart" type="month" value="${esc(c.trackingStart)}"></div>
+    </div>
+    <div class="tiny muted">Use a multa e os juros que estão escritos nos contratos. Meses antes de "começar a cobrar" não aparecem como atrasados.</div>
+    <h2 style="margin-top:8px">Google</h2>
+    <div class="grid g2">
+      <div><label class="f">Link para pedir avaliação</label><input class="i" name="reviewUrl" value="${esc(c.reviewUrl)}"></div>
+      <div><label class="f">Link do Google Maps</label><input class="i" name="mapsUrl" value="${esc(c.mapsUrl)}"></div>
+      <div style="grid-column:1/-1"><label class="f">Endereço (sai no recibo)</label><input class="i" name="address" value="${esc(c.address)}"></div>
+    </div>
+    <div class="row" style="justify-content:flex-end"><button class="btn pri">Salvar ajustes</button></div>
+  </form>
+  <div class="card stack">
+    <h2>Fotos do residencial</h2>
+    <p class="small muted" style="margin:0">Fotos do Perfil da Empresa no Google. A primeira aparece no topo da página.</p>
+    <div class="photos">${[0, 1, 2].map(i => `<div class="ph" style="background-image:url('${photoUrl(i)}')"></div>`).join('')}</div>
+  </div>
+  <div class="card stack small">
+    <h2>Administradores</h2>
+    ${S.isOwner ? `<p style="margin:0">Quem estiver nesta lista entra e vê tudo, como você. Use o e-mail com que a pessoa vai entrar (Gmail ou outro).</p>
+    <div class="list">${['<div class="it"><div><b>' + esc(OWNER_EMAIL) + '</b> <span class="tiny muted">(dono)</span></div></div>'].concat((S.admins || []).map(a => `<div class="it"><div>${esc(a)}</div><button class="btn sm danger" data-rmadm="${esc(a)}">Remover</button></div>`)).join('')}</div>
+    <div class="row"><input class="i" id="admEmail" type="email" placeholder="email@gmail.com" style="flex:1"><button class="btn pri" id="admAdd">Adicionar administrador</button></div>`
+    : `<p style="margin:0">Só o dono (${esc(OWNER_EMAIL)}) pode adicionar ou remover administradores.</p>`}
+    <p class="muted" style="margin:0">Inquilinos não entram nesta lista: basta cadastrar o e-mail de cada um na ficha da kitnet. Ao entrar com esse e-mail, ele vê só a kitnet dele.</p>
+  </div>
+  </div>`;
+  $('#cfgForm').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target);
+    const next = { ...S.cfg, pixType: f.get('pixType'), pixKey: String(f.get('pixKey')).trim(), pixHolder: String(f.get('pixHolder')).trim(),
+      whatsAdmin: String(f.get('whatsAdmin')).trim(), finePct: Number(f.get('finePct')) || 0, interestMonthPct: Number(f.get('interestMonthPct')) || 0,
+      trackingStart: f.get('trackingStart') || S.cfg.trackingStart, reviewUrl: String(f.get('reviewUrl')).trim(), mapsUrl: String(f.get('mapsUrl')).trim(), address: String(f.get('address')).trim() };
+    try { await S.db.doc('config/main').set(next); toast('Ajustes salvos.'); } catch { toast('Não foi possível salvar.'); }
+  };
+  const add = $('#admAdd');
+  if (add) add.onclick = async () => {
+    const e = emailKey($('#admEmail').value); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return toast('Digite um e-mail válido.');
+    try { await S.db.doc('admins/' + e).set({ addedAt: new Date().toISOString() }); toast('Administrador adicionado.'); } catch { toast('Não foi possível adicionar.'); }
+  };
+  $('#app').querySelectorAll('[data-rmadm]').forEach(b => b.onclick = () => {
+    const e = b.dataset.rmadm; b.outerHTML = `<button class="btn sm danger" data-rmyes="${esc(e)}">Confirmar remoção</button>`;
+    $(`[data-rmyes="${e}"]`).onclick = async () => { try { await S.db.doc('admins/' + e).delete(); toast('Administrador removido.'); } catch { toast('Não foi possível remover.'); } };
+  });
+}
+
+/* ---------- Portal do Inquilino ---------- */
+function renderTenant() {
+  const app = $('#app');
+  if (!S.loaded) { app.innerHTML = `<div class="card center muted">Carregando seu portal…</div>`; return; }
+  const cfg = S.cfg;
+  if (!S.portal) {
+    const t = `Olá! Sou inquilino(a) do Residencial Boa Esperança e não consigo ver minha kitnet no Portal do Inquilino. Entrei com o e-mail ${S.me}. Minha kitnet é a nº `;
+    app.innerHTML = `<div class="card stack" style="max-width:640px;margin:0 auto">
+      <h2>Bem-vindo(a) ao Portal do Inquilino</h2>
+      <p class="muted" style="margin:0">O e-mail <b>${esc(S.me)}</b> ainda não está cadastrado em nenhuma kitnet. Confira se entrou com o mesmo e-mail que passou para a administração ou avise a gente.</p>
+      <div class="row">${cfg.whatsAdmin ? `<a class="btn wa" target="_blank" rel="noopener" href="${esc(waLink(cfg.whatsAdmin, t))}">Avisar a administração pelo WhatsApp</a>` : ''}<button class="btn" id="swAcc">Entrar com outro e-mail</button></div>
+      ${cfg.whatsAdmin ? `<div class="tiny muted">WhatsApp da administração: ${esc(cfg.whatsAdmin)}</div>` : ''}
+    </div>`;
+    $('#swAcc').onclick = () => S.auth.signOut();
+    return;
+  }
+  const u = { ...S.portal, id: S.portal.unitId };
+  const st = unitState(u, cfg); const today = todayD(); const cd = contractDaysLeft(u);
+  const start = parseYmd(u.contractStart), end = parseYmd(u.contractEnd);
+  const prog = start && end ? Math.max(0, Math.min(100, Math.round((today - start) / (end - start) * 100))) : 0;
+  const next = st.open.find(o => o.status === 'overdue') || st.open[0];
+  const paid = (u.payments || []).filter(p => p.status === 'paid').sort((a, b) => b.month.localeCompare(a.month));
+  const pix = next && cfg.pixKey ? pixPayload(cfg, next.amount.total, `K${u.number}${next.month.replace('-', '')}`) : '';
+  const avisar = next ? `Olá! Aqui é ${firstName(u.tenantName)}, da Kitnet ${u.number}. Paguei o aluguel de ${monthLabel(next.month)} (${brl(next.amount.total)}). Segue o comprovante.` : '';
+
+  app.innerHTML = `<div class="stack">
+    <div class="card"><div class="row between"><div><div class="tiny muted">Olá,</div><h2 style="margin:0">${esc(u.tenantName)}</h2>
+      <div class="small muted">Kitnet ${esc(u.number)} • vencimento todo dia ${pad(u.dueDay)} • ${brl(baseValue(u))}/mês${u.hasGarage ? ' (com garagem)' : ''}</div></div>${statusPill(st.key)}</div></div>
+    <div class="grid g2">
+      <div class="card stack">
+        <h2>${next ? (next.status === 'overdue' ? 'Aluguel em atraso' : 'Próximo aluguel') : 'Pagamentos'}</h2>
+        ${next ? `
+          <div><div class="big" style="color:${next.status === 'overdue' ? 'var(--red)' : 'var(--ink)'}">${brl(next.amount.total)}</div>
+          <div class="small muted">${monthLabel(next.month)} • vence ${br(ymd(next.due))}${next.status === 'overdue' ? ` • ${next.amount.late} dia(s) de atraso` : next.daysLeft === 0 ? ' • vence hoje' : ` • faltam ${next.daysLeft} dia(s)`}</div>
+          ${next.amount.late ? `<div class="small" style="margin-top:4px">Aluguel ${brl(next.amount.base)} + multa ${brl(next.amount.fine)} + juros ${brl(next.amount.interest)}</div>` : ''}</div>
+          ${pix ? `<div><label class="f">PIX Copia e Cola (valor já incluso)</label><textarea class="i mono" rows="3" readonly>${esc(pix)}</textarea>
+              <div class="row" style="margin-top:6px"><button class="btn pri" id="cpPix">Copiar código PIX</button></div>
+              <div class="tiny muted" style="margin-top:4px">Chave ${esc(cfg.pixType)}: ${esc(cfg.pixKey)} • Titular: ${esc(cfg.pixHolder)}</div></div>` : ''}
+          ${cfg.whatsAdmin ? `<a class="btn wa" target="_blank" rel="noopener" href="${esc(waLink(cfg.whatsAdmin, avisar))}">Já paguei — enviar comprovante</a>` : ''}
+          ${st.open.length > 1 ? `<div class="notice n-warn small">Você tem ${st.open.length} mensalidades em aberto: ${st.open.map(o => monthLabel(o.month)).join(', ')}.</div>` : ''}
+        ` : `<div class="notice n-ok">Tudo em dia! Obrigado. ✅</div>`}
+      </div>
+      <div class="card stack">
+        <h2>Meu contrato</h2>
+        <div class="grid g2"><div><div class="tiny muted">Início</div><b>${br(u.contractStart)}</b></div><div><div class="tiny muted">Término</div><b>${br(u.contractEnd)}</b></div></div>
+        <div><div class="bar"><i style="width:${prog}%"></i></div><div class="tiny muted" style="margin-top:4px">${cd === null ? '' : cd >= 0 ? `Faltam ${cd} dias para o término` : 'Prazo do contrato encerrado — fale com a administração sobre a renovação'}</div></div>
+        ${u.contractUrl ? `<a class="btn" target="_blank" rel="noopener" href="${esc(u.contractUrl)}">Abrir contrato assinado (PDF)</a>` : `<p class="small muted" style="margin:0">O PDF do contrato ainda não foi anexado pela administração.</p>`}
+        <p class="tiny muted" style="margin:0">Água e internet inclusas pelo contrato. A energia elétrica é individual.</p>
+      </div>
+    </div>
+    ${u.wifiName || u.wifiPass || u.energyUC ? `<div class="card">
+      <h2>Minha kitnet</h2>
+      <div class="grid g3">
+        ${u.wifiName ? `<div><div class="tiny muted">Rede Wi-Fi</div><b>${esc(u.wifiName)}</b></div>` : ''}
+        ${u.wifiPass ? `<div><div class="tiny muted">Senha do Wi-Fi</div><div class="row"><b class="mono" style="font-size:14px">${esc(u.wifiPass)}</b><button class="btn sm" id="cpWifi">Copiar</button></div></div>` : ''}
+        ${u.energyUC ? `<div><div class="tiny muted">UC de energia (conta de luz)</div><div class="row"><b class="mono" style="font-size:14px">${esc(u.energyUC)}</b><button class="btn sm" id="cpUC">Copiar</button></div></div>` : ''}
+      </div>
+      ${u.energyUC ? `<div class="tiny muted" style="margin-top:8px">A energia é individual: use este número para consultar ou pagar a conta de luz da sua kitnet.</div>` : ''}
+    </div>` : ''}
+    <div class="card">
+      <h2>Histórico e recibos</h2>
+      ${paid.length ? `<div class="list">${paid.map(p => `<div class="it"><div><b>${monthLabel(p.month)}</b> — ${brl(p.amount)}<div class="small muted">Pago em ${br(p.paidDate)} • Recibo ${esc(p.receiptNo)}</div></div>
+        <div class="row"><button class="btn sm" data-rv="${esc(p.receiptNo)}">Ver</button><button class="btn sm pri" data-rd="${esc(p.receiptNo)}">Baixar PDF</button></div></div>`).join('')}</div>` : `<p class="small muted">Os recibos aparecem aqui assim que a administração registra cada pagamento.</p>`}
+    </div>
+    ${cfg.reviewUrl ? `<div class="card row between"><div><b>Gosta de morar aqui?</b><div class="small muted">Sua avaliação no Google ajuda outros estudantes a nos encontrar.</div></div><a class="btn terra" target="_blank" rel="noopener" href="${esc(cfg.reviewUrl)}">Avaliar no Google</a></div>` : ''}
+  </div>`;
+  const cp = $('#cpPix'); if (cp) cp.onclick = () => copyText(pix, 'Código PIX copiado. Cole no app do seu banco.');
+  const cw = $('#cpWifi'); if (cw) cw.onclick = () => copyText(u.wifiPass, 'Senha do Wi-Fi copiada');
+  const cu = $('#cpUC'); if (cu) cu.onclick = () => copyText(u.energyUC, 'UC de energia copiada');
+  app.querySelectorAll('[data-rv]').forEach(b => b.onclick = () => openReceipt(u, paid.find(p => p.receiptNo === b.dataset.rv), cfg));
+  app.querySelectorAll('[data-rd]').forEach(b => b.onclick = () => downloadReceipt(u, paid.find(p => p.receiptNo === b.dataset.rd), cfg));
+}
+
+init();
+</script>
+</body>
+</html>
