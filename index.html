@@ -732,6 +732,33 @@ async function downloadFile(id, name) {
     setTimeout(() => URL.revokeObjectURL(url), 30000);
   } catch (e) { toast('Não foi possível baixar o arquivo.'); }
 }
+async function fetchFileBytes(id) {
+  const ref = S.db.collection('files').doc(id); const m = (await ref.get()).data();
+  let b64 = ''; for (let i = 0; i < m.chunks; i++) b64 += (await ref.collection('chunks').doc(String(i)).get()).data().d;
+  return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+}
+/* Conferência automática do contrato assinado:
+   1) o arquivo assinado começa exatamente com o PDF enviado (o gov.br só acrescenta a assinatura no fim)
+   2) existe uma assinatura digital nova no arquivo
+   3) o certificado da assinatura traz o nome do inquilino */
+const latin = b => { let s = ''; for (let i = 0; i < b.length; i += 65536) s += String.fromCharCode.apply(null, b.subarray(i, i + 65536)); return s; };
+const plain = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+function checkSigned(signed, draft, tenantName) {
+  let n = draft.length; while (n > 0 && (draft[n - 1] === 10 || draft[n - 1] === 13 || draft[n - 1] === 32)) n--;
+  let prefix = signed.length > n; for (let i = 0; prefix && i < n; i++) if (signed[i] !== draft[i]) prefix = false;
+  const S1 = latin(signed), D1 = latin(draft);
+  const count = (t, r) => (t.match(r) || []).length;
+  const sig = count(S1, /\/ByteRange\s*\[/g) > count(D1, /\/ByteRange\s*\[/g);
+  let certTxt = '';
+  (S1.slice(prefix ? n : 0).match(/\/Contents\s*<([0-9A-Fa-f\s]+)>/g) || []).forEach(m => {
+    const hex = m.replace(/^\/Contents\s*</, '').replace(/[>\s]/g, '');
+    const bytes = new Uint8Array(hex.length / 2); for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+    certTxt += plain(new TextDecoder('utf-8', { fatal: false }).decode(bytes)) + ' ' + plain(latin(bytes));
+  });
+  const parts = plain(tenantName).split(/\s+/).filter(w => w.length > 2);
+  const name = parts.length >= 2 && certTxt.includes(parts[0]) && certTxt.includes(parts[parts.length - 1]);
+  return { prefix, sig, name, ok: prefix && sig && name };
+}
 const GOVBR_SIGN = 'https://www.gov.br/governodigital/pt-br/identidade/assinatura-eletronica';
 
 /* ---------- Contrato digital (admin) ---------- */
@@ -763,6 +790,7 @@ function unitDigitalTab(u) {
         </form>` : r.status === 'sent' ? `
         <div class="notice n-warn small">Aguardando ${esc(firstName(u.tenantName))} assinar e enviar. Enviado em ${br(String(r.sentAt || '').slice(0, 10))}. Novo período: ${br(r.newStart)} a ${br(r.newEnd)}.</div>
         <div class="row"><button class="btn sm" id="dlDraft">Baixar contrato enviado</button>${u.phone ? `<a class="btn wa sm" target="_blank" rel="noopener" href="${esc(waLink(u.phone, wa))}">Avisar no WhatsApp</a>` : ''}<button class="btn sm danger" id="rnCancel">Cancelar renovação</button></div>` : `
+        ${r.check ? `<div class="small">Conferência automática: ${r.check.prefix ? '✅' : '❌'} mesmo contrato enviado • ${r.check.sig ? '✅' : '❌'} assinatura digital • ${r.check.name ? '✅' : '❌'} nome do inquilino no certificado</div>` : ''}
         <div class="notice n-ok small">✅ ${esc(firstName(u.tenantName))} enviou o contrato assinado em ${br(String(r.signedAt || '').slice(0, 10))}. Confira as assinaturas antes de aprovar (dá para validar em validar.iti.gov.br).</div>
         <div class="row"><button class="btn sm" id="dlSigned">Baixar contrato assinado</button><button class="btn pri sm" id="rnApprove">Aprovar: vira o contrato atual (${br(r.newStart)} a ${br(r.newEnd)})</button><button class="btn sm danger" id="rnReject">Pedir novo envio</button></div>`}
     </div></div>`;
@@ -790,22 +818,29 @@ function renewalTenantCard(u) {
   const r = u.renewal; if (!r || r.status === 'done') return '';
   const sent = r.status === 'sent';
   return `<div class="card stack renew-card">
-    <div class="row between"><h2 style="margin:0">📝 Renovação do seu contrato</h2><span class="pill ${sent ? 'p-soon' : 'p-paid'}">${sent ? 'Aguardando sua assinatura' : 'Em conferência'}</span></div>
+    <div class="row between"><h2 style="margin:0">📝 Renovação do seu contrato</h2><span class="pill ${sent ? 'p-soon' : 'p-paid'}">${sent ? 'Aguardando sua assinatura' : r.autoOk ? 'Renovado ✅' : 'Em conferência'}</span></div>
     <div class="small muted">Novo período: <b>${br(r.newStart)}</b> a <b>${br(r.newEnd)}</b>${r.newRent ? ` • aluguel ${brl(r.newRent)}` : ''}. Tudo pelo celular, sem precisar ir até a administração.</div>
     <div class="steps">
       <div class="done"><div><b>Baixe o contrato</b><span class="small muted">Leia com calma antes de assinar.</span><div style="margin-top:6px"><button class="btn sm" id="tDraft">Baixar contrato (PDF)</button></div></div></div>
       <div class="${sent ? '' : 'done'}"><div><b>Assine pelo gov.br</b><span class="small muted">Entre no assinador com sua conta gov.br (nível prata ou ouro), envie o PDF, assine e baixe o arquivo assinado.</span><div style="margin-top:6px"><a class="btn sm" target="_blank" rel="noopener" href="${GOVBR_SIGN}">Abrir assinador gov.br</a></div></div></div>
-      <div class="${sent ? '' : 'done'}"><div><b>Envie o PDF assinado aqui</b>${sent ? `<div class="row" style="margin-top:6px"><input type="file" accept="application/pdf" id="tSigned" class="i" style="flex:1"><button class="btn pri" id="tSend">Enviar assinado</button></div>` : `<span class="small muted">Recebido em ${br(String(r.signedAt || '').slice(0, 10))}. A administração vai conferir e seu contrato será atualizado aqui.</span>`}</div></div>
+      <div class="${sent ? '' : 'done'}"><div><b>Envie o PDF assinado aqui</b>${sent ? `<div class="row" style="margin-top:6px"><input type="file" accept="application/pdf" id="tSigned" class="i" style="flex:1"><button class="btn pri" id="tSend">Enviar assinado</button></div>` : (r.autoOk ? `<span class="small muted">✅ Assinatura conferida automaticamente em ${br(String(r.signedAt || '').slice(0, 10))}. Seu contrato foi renovado: ${br(r.newStart)} a ${br(r.newEnd)}.</span><div style="margin-top:6px"><button class="btn sm" id="tSignedDl">Baixar contrato assinado</button></div>` : `<span class="small muted">Recebido em ${br(String(r.signedAt || '').slice(0, 10))}. A administração vai conferir e seu contrato será atualizado aqui.</span>`)}</div></div>
     </div></div>`;
 }
 function bindRenewalTenant(u) {
   const r = u.renewal; if (!r) return;
   const d = $('#tDraft'); if (d) d.onclick = () => downloadFile(r.draftId, r.draftName);
+  const sd = $('#tSignedDl'); if (sd) sd.onclick = () => downloadFile(r.signedId, r.signedName);
   const b = $('#tSend'); if (!b) return;
   b.onclick = async () => { const f = $('#tSigned').files[0];
-    try { b.disabled = true; b.textContent = 'Enviando…'; const up = await uploadPdf(f, { unitId: u.unitId, email: S.me, kind: 'signed' });
-      await S.db.doc('portal/' + S.me).update({ renewal: { ...r, status: 'signed', signedId: up.id, signedName: up.name, signedAt: new Date().toISOString() } });
-      toast('Contrato assinado enviado! 🎉'); } catch (e) { toast(e.message && !e.code ? e.message : 'Não foi possível enviar. Tente de novo.'); b.disabled = false; b.textContent = 'Enviar assinado'; } };
+    try { b.disabled = true; b.textContent = 'Conferindo assinatura…';
+      if (!f) throw new Error('Escolha o PDF assinado.');
+      let chk = { ok: false };
+      try { chk = checkSigned(new Uint8Array(await f.arrayBuffer()), await fetchFileBytes(r.draftId), u.tenantName); } catch (e) {}
+      if (!chk.ok && chk.prefix === false && chk.sig === false) throw new Error('Este arquivo não parece ser o contrato assinado pelo gov.br. Envie o PDF que o assinador gerou.');
+      b.textContent = 'Enviando…';
+      const up = await uploadPdf(f, { unitId: u.unitId, email: S.me, kind: 'signed' });
+      await S.db.doc('portal/' + S.me).update({ renewal: { ...r, status: 'signed', signedId: up.id, signedName: up.name, signedAt: new Date().toISOString(), check: { prefix: !!chk.prefix, sig: !!chk.sig, name: !!chk.name }, autoOk: !!chk.ok } });
+      toast(chk.ok ? 'Assinatura conferida e contrato renovado! 🎉' : 'Contrato enviado! A administração vai conferir.'); } catch (e) { toast(e.message && !e.code ? e.message : 'Não foi possível enviar. Tente de novo.'); b.disabled = false; b.textContent = 'Enviar assinado'; } };
 }
 
 /* Grava a kitnet e atualiza o portal do inquilino vinculado */
@@ -815,8 +850,12 @@ async function syncSigned() {
   if (syncing || !S.portals) return; syncing = true;
   try { for (const u of Object.values(S.units)) {
     const p = S.portals[emailKey(u.email)]; const r = u.renewal, pr = p && p.renewal;
-    if (r && r.status === 'sent' && pr && pr.status === 'signed' && pr.draftId === r.draftId && pr.signedId)
-      await S.db.doc('units/' + u.id).update({ renewal: { ...r, status: 'signed', signedId: pr.signedId, signedName: pr.signedName || '', signedAt: pr.signedAt || '' } });
+    if (r && r.status === 'sent' && pr && pr.status === 'signed' && pr.draftId === r.draftId && pr.signedId) {
+      const nr = { ...r, status: 'signed', signedId: pr.signedId, signedName: pr.signedName || '', signedAt: pr.signedAt || '', check: pr.check || null, autoOk: !!pr.autoOk };
+      // assinatura conferida pelo sistema: aprova sozinho, sem ninguém clicar
+      if (nr.autoOk) await saveUnit(u, { contractStart: r.newStart, contractEnd: r.newEnd, rent: r.newRent ?? u.rent, contractFileId: nr.signedId, contractFileName: nr.signedName, renewal: { ...nr, status: 'done', approvedAt: new Date().toISOString(), approvedBy: 'automático' } });
+      else await S.db.doc('units/' + u.id).update({ renewal: nr });
+    }
   } } catch (e) {} finally { syncing = false; }
 }
 async function saveUnit(u, patch) {
