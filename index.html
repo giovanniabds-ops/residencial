@@ -111,6 +111,22 @@ hr.s{border:0;border-top:1px solid var(--line);margin:16px 0}
 .feat div{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;font-size:13px}
 .feat b{display:block;font-size:14px;margin-bottom:2px}
 @media(max-width:560px){.feat{grid-template-columns:1fr}.login-hero h2{font-size:23px}}
+body.is-login{background:transparent}
+body.is-login::before{content:"";position:fixed;inset:0;background:url('img/foto1.jpg') center/cover no-repeat;z-index:-2}
+body.is-login::after{content:"";position:fixed;inset:0;background:linear-gradient(160deg,rgba(11,59,45,.72),rgba(11,40,31,.88) 60%,rgba(122,59,30,.7));z-index:-1}
+body.is-login header.top{background:transparent}body.is-login header.top .hero-img,body.is-login header.top::after{display:none}
+body.is-login .login-hero{min-height:170px}body.is-login .feat div{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.18);color:#fff;backdrop-filter:blur(6px)}
+body.is-login .center.tiny.muted{color:rgba(255,255,255,.75)}
+.cover{border-radius:22px;overflow:hidden;position:relative;min-height:170px;background:#0e4d3a center/cover no-repeat;color:#fff;display:flex;align-items:flex-end;box-shadow:var(--shadow)}
+.cover::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,40,31,.1) 0%,rgba(11,40,31,.85) 100%)}
+.cover .in{position:relative;z-index:1;padding:20px;width:100%}
+.cover h2{font-family:Fraunces,Georgia,serif;font-size:30px;margin:0;color:#fff}
+.steps{display:grid;gap:10px;counter-reset:st}
+.steps>div{display:flex;gap:12px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px}
+.steps>div::before{counter-increment:st;content:counter(st);flex:0 0 30px;height:30px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-weight:700}
+.steps>div.done::before{content:"✓";background:#2e9b6b}
+.steps b{display:block}
+.renew-card{border:2px solid var(--terra);background:linear-gradient(180deg,#fff7f1,#fff)}
 .pay-card{background:linear-gradient(135deg,#0e4d3a,#13664c);color:#fff;border:0}
 .pay-card h2,.pay-card .muted,.pay-card .small{color:#fff}
 .pay-card .muted{opacity:.8}
@@ -363,9 +379,10 @@ async function onUser(user) {
     S.cfg = { ...DEFAULT_CFG, ...(snap.exists ? snap.data() : {}) }; S.cfgExists = snap.exists; render();
   }, () => {}));
   if (S.isAdmin) {
+    unsubs.push(S.db.collection('portal').onSnapshot(snap => { S.portals = {}; snap.docs.forEach(d => { S.portals[d.id] = d.data(); }); syncSigned(); }, () => {}));
     unsubs.push(S.db.collection('units').onSnapshot(snap => {
       const u = {}; snap.docs.forEach(d => { u[d.id] = { id: d.id, ...d.data() }; });
-      S.units = u; clearTimeout(timer); S.loaded = true; S.error = ''; render();
+      S.units = u; clearTimeout(timer); S.loaded = true; S.error = ''; syncSigned(); render();
     }, (e) => { clearTimeout(timer); S.loaded = true; S.error = 'Não foi possível ler os dados (' + (e.code || 'erro') + ').'; render(); }));
     if (S.isOwner) unsubs.push(S.db.collection('admins').onSnapshot(snap => { S.admins = snap.docs.map(d => d.id); render(); }, () => {}));
   } else {
@@ -381,7 +398,7 @@ function renderWho() {
   $('#logout').onclick = () => S.auth.signOut();
 }
 function renderLogin() {
-  $('#tabs').innerHTML = ''; $('#brandSub').textContent = 'Gestão de aluguéis • Portal do Inquilino'; paintHero();
+  $('#tabs').innerHTML = ''; $('#brandSub').textContent = 'Gestão de aluguéis • Portal do Inquilino'; paintHero(); document.body.classList.add('is-login');
   $('#app').innerHTML = `<div class="stack" style="max-width:520px;margin:6px auto 30px">
     <div class="login-hero" style="background-image:url('img/foto1.jpg')"><div class="in">
       <div class="row" style="margin-bottom:8px"><span class="chip"><span class="stars">★★★★★</span> 4,9 no Google</span><span class="chip">Boa Esperança • Cuiabá</span></div>
@@ -417,6 +434,7 @@ function renderLogin() {
 /* ============ Render principal ============ */
 function render() {
   if (!S.me) return;
+  document.body.classList.remove('is-login');
   const tabs = $('#tabs');
   if (S.isAdmin) {
     const h = (location.hash || '#painel').slice(1);
@@ -462,7 +480,9 @@ function renderDashboard() {
       else if (o.status === 'soon') actions.push({ u, o, kind: 'soon', sort: 100 + o.daysLeft });
     });
     const cd = contractDaysLeft(u);
-    if (cd !== null && cd <= 60) actions.push({ u, kind: 'renewal', cd, sort: 200 + cd });
+    if (u.renewal && u.renewal.status === 'signed') actions.push({ u, kind: 'signed', sort: -1 });
+    else if (u.renewal && u.renewal.status === 'sent') { /* aguardando o inquilino */ }
+    else if (cd !== null && cd <= 60) actions.push({ u, kind: 'renewal', cd, sort: 200 + cd });
     if (!u.email) actions.push({ u, kind: 'link', sort: 400 });
   });
   actions.sort((a, b) => a.sort - b.sort);
@@ -495,9 +515,12 @@ function actionRow(a) {
   } else if (a.kind === 'soon') {
     left = `${statusPill('soon', a.o.daysLeft === 0 ? 'hoje' : `em ${a.o.daysLeft} dia(s)`)} ${who}<div class="small muted">${monthLabel(a.o.month)} • vence ${br(ymd(a.o.due))} • ${brl(a.o.amount.total)}</div>`;
     right = `<a class="btn wa sm" target="_blank" rel="noopener" href="${esc(waLink(u.phone, msgFor('reminder', u, cfg, a.o)))}">Enviar lembrete</a><button class="btn sm" data-open="${esc(u.id)}" data-tab="pagamentos">Registrar pagamento</button>`;
+  } else if (a.kind === 'signed') {
+    left = `<span class="pill p-paid">Contrato assinado</span> ${who}<div class="small muted">Enviou a renovação assinada pelo gov.br — confira e aprove</div>`;
+    right = `<button class="btn pri sm" data-open="${esc(u.id)}" data-tab="digital">Conferir e aprovar</button>`;
   } else if (a.kind === 'renewal') {
     left = `<span class="pill p-soon">Contrato</span> ${who}<div class="small muted">${a.cd < 0 ? 'terminou em' : 'termina em'} ${br(u.contractEnd)}${a.cd >= 0 ? ` (${a.cd} dias)` : ''}</div>`;
-    right = `<a class="btn wa sm" target="_blank" rel="noopener" href="${esc(waLink(u.phone, msgFor('renewal', u, cfg)))}">Perguntar sobre renovação</a><button class="btn sm" data-open="${esc(u.id)}">Abrir</button>`;
+    right = `<a class="btn wa sm" target="_blank" rel="noopener" href="${esc(waLink(u.phone, msgFor('renewal', u, cfg)))}">Perguntar sobre renovação</a><button class="btn sm" data-open="${esc(u.id)}" data-tab="digital">Renovação digital</button>`;
   } else {
     left = `<span class="pill p-pend">Acesso</span> ${who}<div class="small muted">Sem e-mail de acesso ao Portal do Inquilino</div>`;
     right = `<button class="btn sm" data-open="${esc(u.id)}">Cadastrar e-mail</button>`;
@@ -528,12 +551,12 @@ function openUnit(id, tab = 'dados') { S.openUnit = id; S.unitTab = tab; renderU
 
 function renderUnitModal(isRefresh) {
   const u = S.units[S.openUnit]; if (!u) return;
-  if (isRefresh && S.unitTab === 'dados' && $('#unitForm')) return; // não apaga o que está sendo digitado
-  const tabs = [['dados', 'Dados e contrato'], ['pagamentos', 'Pagamentos e recibos']];
+  if (isRefresh && (S.unitTab === 'dados' && $('#unitForm') || S.unitTab === 'digital' && $('#rnForm'))) return; // não apaga o que está sendo digitado
+  const tabs = [['dados', 'Dados e contrato'], ['digital', 'Contrato digital'], ['pagamentos', 'Pagamentos e recibos']];
   openModal(`Kitnet ${esc(u.number)} ${u.status === 'occupied' ? '— ' + esc(u.tenantName || '') : '(vaga)'}`,
     `<div class="mtabs" style="margin:-16px -16px 16px">${tabs.map(([k, l]) => `<button data-t="${k}" class="${k === S.unitTab ? 'on' : ''}">${l}</button>`).join('')}</div><div id="uBody"></div>`, true);
   $('#mBody').querySelectorAll('[data-t]').forEach(b => b.onclick = () => { S.unitTab = b.dataset.t; renderUnitModal(false); });
-  if (S.unitTab === 'pagamentos') unitPayTab(u); else unitDataTab(u);
+  if (S.unitTab === 'pagamentos') unitPayTab(u); else if (S.unitTab === 'digital') unitDigitalTab(u); else unitDataTab(u);
 }
 
 function unitDataTab(u) {
@@ -685,7 +708,117 @@ function regForm(u, mk) {
   };
 }
 
+/* ---------- Arquivos PDF guardados no Firestore (em pedaços) ---------- */
+const CHUNK = 700000, MAX_PDF = 8 * 1024 * 1024;
+function fileToB64(file) { return new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = bad; r.readAsDataURL(file); }); }
+async function uploadPdf(file, meta) {
+  if (!file) throw new Error('Escolha um arquivo PDF.');
+  if (!/pdf$/i.test(file.type) && !/\.pdf$/i.test(file.name)) throw new Error('O arquivo precisa ser PDF.');
+  if (file.size > MAX_PDF) throw new Error('PDF muito grande (máximo 8 MB).');
+  const b64 = await fileToB64(file); const n = Math.ceil(b64.length / CHUNK);
+  const ref = S.db.collection('files').doc();
+  await ref.set({ ...meta, name: file.name.slice(0, 120), size: file.size, chunks: n, by: S.me, createdAt: new Date().toISOString() });
+  for (let i = 0; i < n; i++) await ref.collection('chunks').doc(String(i)).set({ d: b64.slice(i * CHUNK, (i + 1) * CHUNK) });
+  return { id: ref.id, name: file.name.slice(0, 120) };
+}
+async function downloadFile(id, name) {
+  try {
+    toast('Baixando…');
+    const ref = S.db.collection('files').doc(id); const m = (await ref.get()).data();
+    let b64 = ''; for (let i = 0; i < m.chunks; i++) b64 += (await ref.collection('chunks').doc(String(i)).get()).data().d;
+    const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([arr], { type: 'application/pdf' }));
+    const a = document.createElement('a'); a.href = url; a.download = name || m.name || 'documento.pdf'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  } catch (e) { toast('Não foi possível baixar o arquivo.'); }
+}
+const GOVBR_SIGN = 'https://www.gov.br/governodigital/pt-br/identidade/assinatura-eletronica';
+
+/* ---------- Contrato digital (admin) ---------- */
+function unitDigitalTab(u) {
+  if (u.status !== 'occupied') { $('#uBody').innerHTML = `<div class="notice n-info">Kitnet vaga. Cadastre um inquilino primeiro.</div>`; return; }
+  const r = u.renewal || null;
+  const suggestStart = u.contractEnd ? ymd(new Date(parseYmd(u.contractEnd).getTime() + 86400000)) : '';
+  const suggestEnd = suggestStart ? (d => ymd(new Date(d.getFullYear() + 1, d.getMonth(), d.getDate() - 1)))(parseYmd(suggestStart)) : '';
+  const wa = r ? `Olá, ${firstName(u.tenantName)}! O contrato de renovação da Kitnet ${u.number} já está no Portal do Inquilino. É só entrar, baixar o PDF, assinar pelo gov.br e enviar de volta pelo próprio portal: ${location.origin + location.pathname}` : '';
+  $('#uBody').innerHTML = `<div class="stack">
+    <div class="card stack">
+      <h3 style="margin:0">Contrato atual (PDF)</h3>
+      ${u.contractFileId ? `<div class="row between"><div class="small">📄 ${esc(u.contractFileName || 'contrato.pdf')}</div><button class="btn sm" id="dlCur">Baixar</button></div>` : `<div class="small muted">Nenhum PDF guardado no sistema ainda.</div>`}
+      <div class="row"><input type="file" accept="application/pdf" id="curFile" class="i" style="flex:1"><button class="btn" id="upCur">${u.contractFileId ? 'Trocar PDF' : 'Enviar PDF'}</button></div>
+      <div class="tiny muted">O inquilino baixa este arquivo direto pelo portal (não precisa mais do link do Drive).</div>
+    </div>
+    <div class="card stack renew-card">
+      <h3 style="margin:0">Renovação digital (assinatura gov.br)</h3>
+      ${!r || r.status === 'done' ? `
+        <div class="small muted">1) Defina as novas datas e envie o PDF do novo contrato. 2) O inquilino baixa, assina no gov.br e envia de volta pelo portal. 3) Você confere e aprova — as datas e o contrato são atualizados sozinhos.</div>
+        <form id="rnForm" class="stack">
+          <div class="grid g3">
+            <div><label class="f">Novo início</label><input class="i" name="s" type="date" value="${esc(suggestStart)}" required></div>
+            <div><label class="f">Novo término</label><input class="i" name="e" type="date" value="${esc(suggestEnd)}" required></div>
+            <div><label class="f">Novo aluguel (R$)</label><input class="i" name="rent" type="number" step="0.01" min="0" value="${esc(u.rent ?? 1200)}"></div>
+          </div>
+          <div><label class="f">PDF do contrato para assinar</label><input type="file" accept="application/pdf" name="pdf" class="i" required></div>
+          <div class="row" style="justify-content:flex-end"><button class="btn pri">Enviar para o inquilino assinar</button></div>
+        </form>` : r.status === 'sent' ? `
+        <div class="notice n-warn small">Aguardando ${esc(firstName(u.tenantName))} assinar e enviar. Enviado em ${br(String(r.sentAt || '').slice(0, 10))}. Novo período: ${br(r.newStart)} a ${br(r.newEnd)}.</div>
+        <div class="row"><button class="btn sm" id="dlDraft">Baixar contrato enviado</button>${u.phone ? `<a class="btn wa sm" target="_blank" rel="noopener" href="${esc(waLink(u.phone, wa))}">Avisar no WhatsApp</a>` : ''}<button class="btn sm danger" id="rnCancel">Cancelar renovação</button></div>` : `
+        <div class="notice n-ok small">✅ ${esc(firstName(u.tenantName))} enviou o contrato assinado em ${br(String(r.signedAt || '').slice(0, 10))}. Confira as assinaturas antes de aprovar (dá para validar em validar.iti.gov.br).</div>
+        <div class="row"><button class="btn sm" id="dlSigned">Baixar contrato assinado</button><button class="btn pri sm" id="rnApprove">Aprovar: vira o contrato atual (${br(r.newStart)} a ${br(r.newEnd)})</button><button class="btn sm danger" id="rnReject">Pedir novo envio</button></div>`}
+    </div></div>`;
+  const busy = (b, t) => { b.disabled = true; b.textContent = t; };
+  const dlc = $('#dlCur'); if (dlc) dlc.onclick = () => downloadFile(u.contractFileId, u.contractFileName);
+  $('#upCur').onclick = async (e) => { const f = $('#curFile').files[0]; try { busy(e.target, 'Enviando…'); const up = await uploadPdf(f, { unitId: u.id, email: emailKey(u.email), kind: 'contract' });
+    await saveUnit(u, { contractFileId: up.id, contractFileName: up.name }); toast('Contrato guardado.'); renderUnitModal(false); } catch (err) { toast(err.message || 'Erro ao enviar.'); e.target.disabled = false; e.target.textContent = 'Enviar PDF'; } };
+  const fm = $('#rnForm');
+  if (fm) fm.onsubmit = async (e) => { e.preventDefault(); const f = new FormData(fm); const b = fm.querySelector('button');
+    if (f.get('e') <= f.get('s')) return toast('O término precisa ser depois do início.');
+    try { busy(b, 'Enviando…'); const up = await uploadPdf(f.get('pdf'), { unitId: u.id, email: emailKey(u.email), kind: 'draft' });
+      await saveUnit(u, { renewal: { status: 'sent', draftId: up.id, draftName: up.name, newStart: f.get('s'), newEnd: f.get('e'), newRent: r2(f.get('rent')), sentAt: new Date().toISOString() } });
+      toast('Enviado! Avise o inquilino pelo WhatsApp.'); fm.remove(); renderUnitModal(false); } catch (err) { toast(err.message || 'Erro ao enviar.'); b.disabled = false; b.textContent = 'Enviar para o inquilino assinar'; } };
+  const d1 = $('#dlDraft'); if (d1) d1.onclick = () => downloadFile(r.draftId, r.draftName);
+  const d2 = $('#dlSigned'); if (d2) d2.onclick = () => downloadFile(r.signedId, r.signedName);
+  const c = $('#rnCancel'); if (c) c.onclick = async () => { await saveUnit(u, { renewal: null }); toast('Renovação cancelada.'); renderUnitModal(false); };
+  const rj = $('#rnReject'); if (rj) rj.onclick = async () => { await saveUnit(u, { renewal: { ...r, status: 'sent', signedId: '', signedName: '', signedAt: '' } }); toast('O inquilino poderá enviar de novo.'); renderUnitModal(false); };
+  const ap = $('#rnApprove'); if (ap) ap.onclick = async () => { busy(ap, 'Aprovando…');
+    await saveUnit(u, { contractStart: r.newStart, contractEnd: r.newEnd, rent: r.newRent ?? u.rent, contractFileId: r.signedId, contractFileName: r.signedName, renewal: { ...r, status: 'done', approvedAt: new Date().toISOString() } });
+    toast('Contrato renovado! Datas atualizadas.'); renderUnitModal(false); };
+}
+
+/* ---------- Renovação (inquilino) ---------- */
+function renewalTenantCard(u) {
+  const r = u.renewal; if (!r || r.status === 'done') return '';
+  const sent = r.status === 'sent';
+  return `<div class="card stack renew-card">
+    <div class="row between"><h2 style="margin:0">📝 Renovação do seu contrato</h2><span class="pill ${sent ? 'p-soon' : 'p-paid'}">${sent ? 'Aguardando sua assinatura' : 'Em conferência'}</span></div>
+    <div class="small muted">Novo período: <b>${br(r.newStart)}</b> a <b>${br(r.newEnd)}</b>${r.newRent ? ` • aluguel ${brl(r.newRent)}` : ''}. Tudo pelo celular, sem precisar ir até a administração.</div>
+    <div class="steps">
+      <div class="done"><div><b>Baixe o contrato</b><span class="small muted">Leia com calma antes de assinar.</span><div style="margin-top:6px"><button class="btn sm" id="tDraft">Baixar contrato (PDF)</button></div></div></div>
+      <div class="${sent ? '' : 'done'}"><div><b>Assine pelo gov.br</b><span class="small muted">Entre no assinador com sua conta gov.br (nível prata ou ouro), envie o PDF, assine e baixe o arquivo assinado.</span><div style="margin-top:6px"><a class="btn sm" target="_blank" rel="noopener" href="${GOVBR_SIGN}">Abrir assinador gov.br</a></div></div></div>
+      <div class="${sent ? '' : 'done'}"><div><b>Envie o PDF assinado aqui</b>${sent ? `<div class="row" style="margin-top:6px"><input type="file" accept="application/pdf" id="tSigned" class="i" style="flex:1"><button class="btn pri" id="tSend">Enviar assinado</button></div>` : `<span class="small muted">Recebido em ${br(String(r.signedAt || '').slice(0, 10))}. A administração vai conferir e seu contrato será atualizado aqui.</span>`}</div></div>
+    </div></div>`;
+}
+function bindRenewalTenant(u) {
+  const r = u.renewal; if (!r) return;
+  const d = $('#tDraft'); if (d) d.onclick = () => downloadFile(r.draftId, r.draftName);
+  const b = $('#tSend'); if (!b) return;
+  b.onclick = async () => { const f = $('#tSigned').files[0];
+    try { b.disabled = true; b.textContent = 'Enviando…'; const up = await uploadPdf(f, { unitId: u.unitId, email: S.me, kind: 'signed' });
+      await S.db.doc('portal/' + S.me).update({ renewal: { ...r, status: 'signed', signedId: up.id, signedName: up.name, signedAt: new Date().toISOString() } });
+      toast('Contrato assinado enviado! 🎉'); } catch (e) { toast(e.message && !e.code ? e.message : 'Não foi possível enviar. Tente de novo.'); b.disabled = false; b.textContent = 'Enviar assinado'; } };
+}
+
 /* Grava a kitnet e atualiza o portal do inquilino vinculado */
+/* Leva para a ficha da kitnet o contrato assinado que o inquilino enviou pelo portal */
+let syncing = false;
+async function syncSigned() {
+  if (syncing || !S.portals) return; syncing = true;
+  try { for (const u of Object.values(S.units)) {
+    const p = S.portals[emailKey(u.email)]; const r = u.renewal, pr = p && p.renewal;
+    if (r && r.status === 'sent' && pr && pr.status === 'signed' && pr.draftId === r.draftId && pr.signedId)
+      await S.db.doc('units/' + u.id).update({ renewal: { ...r, status: 'signed', signedId: pr.signedId, signedName: pr.signedName || '', signedAt: pr.signedAt || '' } });
+  } } catch (e) {} finally { syncing = false; }
+}
 async function saveUnit(u, patch) {
   try {
     const ref = S.db.doc('units/' + u.id);
@@ -697,7 +830,7 @@ async function saveUnit(u, patch) {
       await S.db.doc('portal/' + newKey).set({
         unitId: u.id, number: next.number, tenantName: next.tenantName, cpf: next.cpf, status: 'occupied',
         rent: next.rent, hasGarage: !!next.hasGarage, garageFee: next.garageFee, dueDay: next.dueDay,
-        contractStart: next.contractStart, contractEnd: next.contractEnd, contractUrl: next.contractUrl || '', wifiName: next.wifiName || '', wifiPass: next.wifiPass || '', energyUC: next.energyUC || '', payments: next.payments || [], updatedAt: new Date().toISOString()
+        contractStart: next.contractStart, contractEnd: next.contractEnd, contractUrl: next.contractUrl || '', wifiName: next.wifiName || '', wifiPass: next.wifiPass || '', energyUC: next.energyUC || '', contractFileId: next.contractFileId || '', contractFileName: next.contractFileName || '', renewal: next.renewal || null, payments: next.payments || [], updatedAt: new Date().toISOString()
       });
     }
   } catch (e) { toast(e && e.code === 'quota_exceeded' ? 'Limite de armazenamento atingido.' : 'Não foi possível salvar. Tente de novo.'); throw e; }
@@ -762,6 +895,7 @@ function renderSettings() {
 
 /* ---------- Portal do Inquilino ---------- */
 function renderTenant() {
+  document.body.classList.remove('is-login');
   const app = $('#app');
   if (!S.loaded) { app.innerHTML = `<div class="card center muted">Carregando seu portal…</div>`; return; }
   const cfg = S.cfg;
@@ -786,8 +920,9 @@ function renderTenant() {
   const avisar = next ? `Olá! Aqui é ${firstName(u.tenantName)}, da Kitnet ${u.number}. Paguei o aluguel de ${monthLabel(next.month)} (${brl(next.amount.total)}). Segue o comprovante.` : '';
 
   app.innerHTML = `<div class="stack">
-    <div class="card"><div class="row between"><div><div class="tiny muted">Olá,</div><h2 style="margin:0">${esc(u.tenantName)}</h2>
-      <div class="small muted">Kitnet ${esc(u.number)} • ${st.key === 'exempt' ? 'isento de aluguel' : `vencimento todo dia ${pad(u.dueDay)} • ${brl(baseValue(u))}/mês`}${u.hasGarage ? ' (com garagem)' : ''}</div></div>${statusPill(st.key)}</div></div>
+    <div class="cover" style="background-image:url('${photoUrl(1)}')"><div class="in"><div class="row between" style="align-items:flex-end"><div><div class="small" style="opacity:.85">Olá, ${esc(firstName(u.tenantName))} 👋</div><h2>Kitnet ${esc(u.number)}</h2>
+      <div class="small" style="opacity:.9">${st.key === 'exempt' ? 'isento de aluguel' : `vencimento todo dia ${pad(u.dueDay)} • ${brl(baseValue(u))}/mês`}${u.hasGarage ? ' (com garagem)' : ''}</div></div>${statusPill(st.key)}</div></div></div>
+    ${renewalTenantCard(u)}
     <div class="grid g2">
       <div class="card stack ${next && next.status !== 'overdue' ? 'pay-card' : ''}">
         <h2>${next ? (next.status === 'overdue' ? 'Aluguel em atraso' : 'Próximo aluguel') : 'Pagamentos'}</h2>
@@ -806,7 +941,7 @@ function renderTenant() {
         <h2>Meu contrato</h2>
         <div class="grid g2"><div><div class="tiny muted">Início</div><b>${br(u.contractStart)}</b></div><div><div class="tiny muted">Término</div><b>${br(u.contractEnd)}</b></div></div>
         <div><div class="bar"><i style="width:${prog}%"></i></div><div class="tiny muted" style="margin-top:4px">${cd === null ? '' : cd >= 0 ? `Faltam ${cd} dias para o término` : 'Prazo do contrato encerrado — fale com a administração sobre a renovação'}</div></div>
-        ${u.contractUrl ? `<a class="btn" target="_blank" rel="noopener" href="${esc(u.contractUrl)}">Abrir contrato assinado (PDF)</a>` : `<p class="small muted" style="margin:0">O PDF do contrato ainda não foi anexado pela administração.</p>`}
+        ${u.contractFileId ? `<button class="btn" id="dlContract">Baixar contrato assinado (PDF)</button>` : u.contractUrl ? `<a class="btn" target="_blank" rel="noopener" href="${esc(u.contractUrl)}">Abrir contrato assinado (PDF)</a>` : `<p class="small muted" style="margin:0">O PDF do contrato ainda não foi anexado pela administração.</p>`}
         <p class="tiny muted" style="margin:0">Água e internet inclusas pelo contrato. A energia elétrica é individual.</p>
       </div>
     </div>
@@ -826,6 +961,8 @@ function renderTenant() {
     </div>
     ${cfg.reviewUrl ? `<div class="card row between"><div><b>Gosta de morar aqui?</b><div class="small muted">Sua avaliação no Google ajuda outros estudantes a nos encontrar.</div></div><a class="btn terra" target="_blank" rel="noopener" href="${esc(cfg.reviewUrl)}">Avaliar no Google</a></div>` : ''}
   </div>`;
+  const dc = $('#dlContract'); if (dc) dc.onclick = () => downloadFile(u.contractFileId, u.contractFileName || 'contrato.pdf');
+  bindRenewalTenant(u);
   const cp = $('#cpPix'); if (cp) cp.onclick = () => copyText(pix, 'Código PIX copiado. Cole no app do seu banco.');
   const cw = $('#cpWifi'); if (cw) cw.onclick = () => copyText(u.wifiPass, 'Senha do Wi-Fi copiada');
   const cu = $('#cpUC'); if (cu) cu.onclick = () => copyText(u.energyUC, 'UC de energia copiada');
