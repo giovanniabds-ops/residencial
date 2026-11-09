@@ -983,7 +983,7 @@ async function saveUnit(u, patch) {
       await S.db.doc('portal/' + newKey).set({
         unitId: u.id, number: next.number, tenantName: next.tenantName, cpf: next.cpf, status: 'occupied',
         rent: next.rent, hasGarage: !!next.hasGarage, garageFee: next.garageFee, dueDay: next.dueDay,
-        contractStart: next.contractStart, contractEnd: next.contractEnd, contractUrl: next.contractUrl || '', wifiName: next.wifiName || '', wifiPass: next.wifiPass || '', energyUC: next.energyUC || '', contractFileId: next.contractFileId || '', contractFileName: next.contractFileName || '', renewal: next.renewal || null, payments: next.payments || [], updatedAt: new Date().toISOString()
+        contractStart: next.contractStart, contractEnd: next.contractEnd, contractUrl: next.contractUrl || '', wifiName: next.wifiName || '', wifiPass: next.wifiPass || '', energyUC: next.energyUC || '', contractFileId: next.contractFileId || '', contractFileName: next.contractFileName || '', renewal: next.renewal || null, payments: next.payments || [], asaas: next.asaas || {}, updatedAt: new Date().toISOString()
       });
     }
   } catch (e) { toast(e && e.code === 'quota_exceeded' ? 'Limite de armazenamento atingido.' : 'Não foi possível salvar. Tente de novo.'); throw e; }
@@ -1069,7 +1069,8 @@ function renderTenant() {
   const prog = start && end ? Math.max(0, Math.min(100, Math.round((today - start) / (end - start) * 100))) : 0;
   const next = st.open.find(o => o.status === 'overdue') || st.open[0];
   const paid = (u.payments || []).filter(p => p.status === 'paid').sort((a, b) => b.month.localeCompare(a.month));
-  const pix = next && cfg.pixKey ? pixPayload(cfg, next.amount.total, `K${u.number}${next.month.replace('-', '')}`) : '';
+  const az = next && u.asaas && u.asaas[next.month] && !u.asaas[next.month].paid ? u.asaas[next.month] : null;
+  const pix = az && az.pix ? az.pix : next && cfg.pixKey ? pixPayload(cfg, next.amount.total, `K${u.number}${next.month.replace('-', '')}`) : '';
   const avisar = next ? `Olá! Aqui é ${firstName(u.tenantName)}, da Kitnet ${u.number}. Paguei o aluguel de ${monthLabel(next.month)} (${brl(next.amount.total)}). Segue o comprovante.` : '';
 
   app.innerHTML = `<div class="stack">
@@ -1085,8 +1086,8 @@ function renderTenant() {
           ${next.amount.late ? `<div class="small" style="margin-top:4px">Aluguel ${brl(next.amount.base)} + multa ${brl(next.amount.fine)} + juros ${brl(next.amount.interest)}</div>` : ''}</div>
           ${pix ? `<div><label class="f">PIX Copia e Cola (valor já incluso)</label><textarea class="i mono" rows="3" readonly>${esc(pix)}</textarea>
               <div class="row" style="margin-top:6px"><button class="btn pri" id="cpPix">Copiar código PIX</button></div>
-              <div class="tiny muted" style="margin-top:4px">Chave ${esc(cfg.pixType)}: ${esc(cfg.pixKey)} • Titular: ${esc(cfg.pixHolder)}</div></div>` : ''}
-          ${cfg.whatsAdmin ? `<a class="btn wa" target="_blank" rel="noopener" href="${esc(waLink(cfg.whatsAdmin, avisar))}">Já paguei — enviar comprovante</a>` : ''}
+              ${az ? `<div class="tiny muted" style="margin-top:4px">✅ Pagou por este código? A baixa é automática — o recibo aparece aqui em instantes, não precisa mandar comprovante.</div>${az.invoiceUrl ? `<a class="btn sm" style="margin-top:6px" target="_blank" rel="noopener" href="${esc(az.invoiceUrl)}">Abrir fatura (QR Code)</a>` : ''}` : `<div class="tiny muted" style="margin-top:4px">Chave ${esc(cfg.pixType)}: ${esc(cfg.pixKey)} • Titular: ${esc(cfg.pixHolder)}</div>`}</div>` : ''}
+          ${cfg.whatsAdmin && !az ? `<a class="btn wa" target="_blank" rel="noopener" href="${esc(waLink(cfg.whatsAdmin, avisar))}">Já paguei — enviar comprovante</a>` : ''}
           ${st.open.length > 1 ? `<div class="notice n-warn small">Você tem ${st.open.length} mensalidades em aberto: ${st.open.map(o => monthLabel(o.month)).join(', ')}.</div>` : ''}
         ` : st.key === 'exempt' ? `<div class="notice n-ok">Você está isento de aluguel. Não há nada a pagar. ✅</div>` : `<div class="notice n-ok">Tudo em dia! Obrigado. ✅</div>`}
       </div>
