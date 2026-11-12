@@ -553,7 +553,7 @@ function renderUnits() {
     return `<div class="card unit" data-open="${esc(u.id)}">
       <div class="row between"><div class="num">${esc(u.number)}</div>${statusPill(st.key)}</div>
       <div style="font-weight:600;margin-top:4px">${u.status === 'occupied' ? esc(u.tenantName || 'Sem nome') : 'Disponível'}</div>
-      <div class="small muted">${u.status === 'occupied' && baseValue(u) <= 0 ? 'Isento de aluguel' + (u.hasGarage ? ' (c/ garagem)' : '') : `${brl(baseValue(u))}/mês${u.hasGarage ? ' (c/ garagem)' : ''} • paga todo dia ${pad(u.dueDay || 10)}`}</div>
+      <div class="small muted">${u.status === 'occupied' && baseValue(u) <= 0 ? 'Isento de aluguel' + (u.hasGarage ? ' (c/ garagem)' : '') : `${brl(baseValue(u))}/mês${u.hasGarage ? ' (c/ garagem)' : ''} • paga todo dia ${pad(u.dueDay || 10)}${u.status === 'occupied' && !u.cobrancaOk ? ' • <b style="color:#b45309">cobrança não liberada</b>' : ''}`}</div>
       ${u.status === 'occupied' ? `<div class="small muted">Contrato até ${br(u.contractEnd)}${cd !== null && cd <= 60 ? ` • <b style="color:${cd < 0 ? 'var(--red)' : 'var(--amber)'}">${cd < 0 ? 'vencido' : cd + ' dias'}</b>` : ''}</div>` : ''}
       ${nextOpen ? `<div class="small" style="margin-top:6px">Em aberto: ${monthLabel(nextOpen.month)} — <b>${brl(nextOpen.amount.total)}</b></div>` : ''}
       ${u.wifiName || u.energyUC ? `<div class="tiny muted" style="margin-top:6px">${u.wifiName ? 'Wi-Fi: ' + esc(u.wifiName) : ''}${u.wifiName && u.energyUC ? ' • ' : ''}${u.energyUC ? 'UC ' + esc(u.energyUC) : ''}</div>` : ''}
@@ -586,6 +586,7 @@ function unitDataTab(u) {
         <div><label class="f">Data de início do contrato</label><input class="i" name="contractStart" type="date" value="${esc(u.contractStart || '')}"></div>
         <div><label class="f">Data de término do contrato</label><input class="i" name="contractEnd" type="date" value="${esc(u.contractEnd || '')}"></div>
         <div><label class="f">Dia do pagamento do aluguel (todo mês)</label><select class="i" name="dueDay">${Array.from({ length: 31 }, (_, i) => i + 1).map(d => `<option value="${d}" ${Number(u.dueDay ?? 10) === d ? 'selected' : ''}>Dia ${pad(d)}</option>`).join('')}</select></div>
+        <div style="grid-column:1/-1"><label class="f" style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" name="cobrancaOk" ${u.cobrancaOk ? 'checked' : ''}> Dados de cobrança conferidos — liberar cobrança automática (Pix)</label><div class="small muted">Enquanto desmarcado, o sistema não gera cobrança para esta kitnet.</div></div>
       </div>
       <div class="row between" style="margin-top:6px"><div class="tiny muted">Em meses mais curtos (ex.: dia 31 em fevereiro), o vencimento passa para o último dia do mês.</div>
         ${occ && u.contractEnd ? `<button type="button" class="btn sm" id="renew12">Renovar +12 meses</button>` : ''}</div>
@@ -632,7 +633,7 @@ function unitDataTab(u) {
   $('#unitForm').onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target);
     const patch = {
-      status: f.get('status'), rent: r2(f.get('rent')), dueDay: Math.min(31, Math.max(1, Number(f.get('dueDay')) || 10)),
+      status: f.get('status'), rent: r2(f.get('rent')), dueDay: Math.min(31, Math.max(1, Number(f.get('dueDay')) || 10)), cobrancaOk: f.get('cobrancaOk') === 'on',
       hasGarage: f.get('hasGarage') === 'yes', garageFee: r2(f.get('garageFee')),
       tenantName: String(f.get('tenantName') || '').trim(), cpf: String(f.get('cpf') || '').trim(), phone: String(f.get('phone') || '').trim(),
       email: emailKey(f.get('email')), contractStart: f.get('contractStart') || '', contractEnd: f.get('contractEnd') || '',
