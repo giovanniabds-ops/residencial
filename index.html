@@ -414,20 +414,14 @@ function renderLogin() {
   $('#tabs').innerHTML = ''; $('#brandSub').textContent = 'Gestão de aluguéis • Portal do Inquilino'; paintHero(); document.body.classList.add('is-login');
   $('#app').innerHTML = `<div class="stack" style="max-width:520px;margin:6px auto 30px">
     <img src="img/emblema-horizontal.png" alt="Residencial Boa Esperança — Kitnets • Cuiabá, a Cidade Verde" style="width:100%;display:block;border-radius:22px;box-shadow:0 14px 34px rgba(0,0,0,.35)">
-    <div class="login-hero" style="background-image:url('img/foto1.jpg')"><div class="in">
-      <div class="row" style="margin-bottom:8px"><span class="chip"><span class="stars">★★★★★</span> 4,9 no Google</span><span class="chip">Boa Esperança • Cuiabá</span></div>
-      <h2>Sua kitnet, na palma da mão</h2>
-      <div class="small" style="opacity:.9">Contrato, vencimentos, PIX, recibos e Wi-Fi em um só lugar.</div>
-    </div></div>
     <div class="card stack">
-    <h2 style="margin:0">Entrar</h2>
-    <p class="small muted" style="margin:0">Inquilinos: use o mesmo e-mail que você informou à administração.</p>
+    <h2 style="margin:0">Portal do Inquilino</h2>
+    <p class="small muted" style="margin:0">Contrato, Pix, recibos e manutenção em um só lugar. Entre com o mesmo e-mail que você informou à administração.</p>
     <button class="btn pri" id="gLogin" style="justify-content:center;padding:12px">Entrar com Google (Gmail)</button>
     <div class="center tiny muted">ou receba um link de acesso no seu e-mail</div>
     <div class="row"><input class="i" id="lkEmail" type="email" placeholder="seu@email.com" style="flex:1"><button class="btn" id="lkSend">Enviar link</button></div>
     <div id="lkMsg"></div>
     </div>
-    <div class="feat"><div><b>📄 Contrato</b>Datas e PDF sempre à mão</div><div><b>💳 PIX na hora</b>Código com o valor certo</div><div><b>🧾 Recibos</b>Baixe quando quiser</div></div>
     <p class="center tiny muted" style="margin:0">Residencial Boa Esperança • R. Dr. Luís Felipe Sabóia Ribeiro, 493 — Cuiabá/MT</p>
   </div>`;
   $('#gLogin').onclick = async () => {
