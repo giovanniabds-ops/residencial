@@ -618,11 +618,11 @@ function unitDataTab(u) {
     <hr class="s">
     <div>
       <h3>Contrato assinado (PDF)</h3>
-      <label class="f">Link do contrato no Google Drive</label>
-      <div class="row"><input class="i" name="contractUrl" value="${esc(u.contractUrl || '')}" placeholder="https://drive.google.com/file/d/..." style="flex:1">
-      ${u.contractUrl ? `<a class="btn sm" target="_blank" rel="noopener" href="${esc(u.contractUrl)}">Abrir</a>` : ''}</div>
-      <div class="tiny muted" style="margin-top:4px">No Google Drive, compartilhe o PDF só com o e-mail do inquilino (como Leitor) e cole o link aqui. Ele abre pelo portal.</div>
-    </div>
+      ${(window._curU = u, '')}
+      ${u.contractFileId ? `<div class="row between"><div class="small">📄 ${esc(u.contractFileName || 'contrato.pdf')}</div><button type="button" class="btn sm" onclick="rbeDlCur()">Baixar</button></div>` : `<div class="small muted">Nenhum PDF guardado ainda.${u.contractUrl ? ' (Há um link antigo do Drive, que continua funcionando até você enviar o PDF.)' : ''}</div>`}
+      <div class="row" style="margin-top:6px"><input type="file" accept="application/pdf" id="curFile2" class="i" style="flex:1"><button type="button" class="btn" onclick="rbeUpCur(this)">${u.contractFileId ? 'Trocar PDF' : 'Enviar PDF'}</button></div>
+      <input type="hidden" name="contractUrl" value="${esc(u.contractFileId ? '' : (u.contractUrl || ''))}">
+      <div class="tiny muted" style="margin-top:4px">O PDF fica guardado na plataforma e o inquilino baixa pelo portal — não precisa de Google Drive.</div>
     <div class="row between" style="margin-top:8px">
       <div class="row">${occ ? `<button type="button" class="btn danger sm" id="endLease">Encerrar locação…</button>` : ''}</div>
       <button class="btn pri" type="submit">Salvar</button>
@@ -830,6 +830,12 @@ function unitDigitalTab(u) {
     toast('Contrato aprovado! Datas atualizadas.'); renderUnitModal(false); };
 }
 
+
+window.rbeDlCur = () => { const u = window._curU; if (u) downloadFile(u.contractFileId, u.contractFileName || 'contrato.pdf'); };
+window.rbeUpCur = async (btn) => { const u = window._curU; const f = $('#curFile2').files[0]; if (!f) return toast('Escolha o PDF do contrato.');
+  try { btn.disabled = true; btn.textContent = 'Enviando…'; const up = await uploadPdf(f, { unitId: u.id, email: emailKey(u.email), kind: 'contract' });
+    await saveUnit(u, { contractFileId: up.id, contractFileName: up.name, contractUrl: '' }); toast('Contrato guardado na plataforma.'); renderUnitModal(false); }
+  catch (e) { toast(e.message || 'Erro ao enviar.'); btn.disabled = false; btn.textContent = 'Enviar PDF'; } };
 /* ---------- Renovação (inquilino) ---------- */
 function renewalTenantCard(u) {
   const r = u.renewal; if (!r || r.status === 'done') return '';
