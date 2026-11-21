@@ -566,11 +566,11 @@ function openUnit(id, tab = 'dados') { S.openUnit = id; S.unitTab = tab; renderU
 function renderUnitModal(isRefresh) {
   const u = S.units[S.openUnit]; if (!u) return;
   if (isRefresh && (S.unitTab === 'dados' && $('#unitForm') || S.unitTab === 'digital' && $('#rnForm'))) return; // não apaga o que está sendo digitado
-  const tabs = [['dados', 'Dados e contrato'], ['digital', 'Contrato digital'], ['pagamentos', 'Pagamentos e recibos']];
+  const tabs = [['dados', 'Dados e contrato'], ['digital', 'Contrato digital'], ['pagamentos', 'Pagamentos e recibos'], ['vistoria', 'Vistoria']];
   openModal(`Kitnet ${esc(u.number)} ${u.status === 'occupied' ? '— ' + esc(u.tenantName || '') : '(vaga)'}`,
     `<div class="mtabs" style="margin:-16px -16px 16px">${tabs.map(([k, l]) => `<button data-t="${k}" class="${k === S.unitTab ? 'on' : ''}">${l}</button>`).join('')}</div><div id="uBody"></div>`, true);
   $('#mBody').querySelectorAll('[data-t]').forEach(b => b.onclick = () => { S.unitTab = b.dataset.t; renderUnitModal(false); });
-  if (S.unitTab === 'pagamentos') unitPayTab(u); else if (S.unitTab === 'digital') unitDigitalTab(u); else unitDataTab(u);
+  if (S.unitTab === 'vistoria') unitVistoriaTab(u); else if (S.unitTab === 'pagamentos') unitPayTab(u); else if (S.unitTab === 'digital') unitDigitalTab(u); else unitDataTab(u);
 }
 
 function unitDataTab(u) {
@@ -836,6 +836,67 @@ window.rbeUpCur = async (btn) => { const u = window._curU; const f = $('#curFile
   try { btn.disabled = true; btn.textContent = 'Enviando…'; const up = await uploadPdf(f, { unitId: u.id, email: emailKey(u.email), kind: 'contract' });
     await saveUnit(u, { contractFileId: up.id, contractFileName: up.name, contractUrl: '' }); toast('Contrato guardado na plataforma.'); renderUnitModal(false); }
   catch (e) { toast(e.message || 'Erro ao enviar.'); btn.disabled = false; btn.textContent = 'Enviar PDF'; } };
+
+/* ---------- Vistoria com fotos ---------- */
+const VIST_DAYS = 5;
+async function uploadPhotoFile(file, meta) {
+  const d = await shrinkPhoto(file); const b64 = d.split(',')[1];
+  const ref = S.db.collection('files').doc();
+  await ref.set({ ...meta, name: (file.name || 'foto.jpg').slice(0, 120), size: b64.length, chunks: 1, mime: 'image/jpeg', by: S.me, createdAt: new Date().toISOString() });
+  await ref.collection('chunks').doc('0').set({ d: b64 });
+  return ref.id;
+}
+const vistCache = {};
+async function loadVistPhotos(ids, box) {
+  for (const id of ids || []) {
+    try { if (!vistCache[id]) vistCache[id] = 'data:image/jpeg;base64,' + (await S.db.doc('files/' + id + '/chunks/0').get()).data().d; } catch (e) { continue; }
+    const im = document.createElement('img'); im.src = vistCache[id]; im.alt = 'Foto da vistoria';
+    im.onclick = () => { const lb = document.createElement('div'); lb.className = 'lightbox'; lb.innerHTML = '<img src="' + vistCache[id] + '">'; lb.onclick = () => lb.remove(); document.body.appendChild(lb); };
+    box.appendChild(im);
+  }
+}
+function vistStatus(v, ack) {
+  if (!v || !v.sentAt) return { k: 'draft', t: 'Ainda não enviada ao inquilino' };
+  if (ack && ack.sentAt === v.sentAt) return ack.status === 'ok' ? { k: 'ok', t: '✅ Inquilino concordou com o laudo em ' + br(String(ack.at).slice(0, 10)) } : { k: 'contest', t: '⚠️ Inquilino apontou divergências em ' + br(String(ack.at).slice(0, 10)) + ': "' + (ack.text || '') + '"' };
+  const lim = new Date(new Date(v.sentAt).getTime() + VIST_DAYS * 86400000);
+  return new Date() > lim ? { k: 'ok', t: '✅ Aceita automaticamente (sem contestação em ' + VIST_DAYS + ' dias, prazo encerrado em ' + br(ymd(lim)) + ')' } : { k: 'wait', t: '⏳ Aguardando o inquilino conferir — prazo até ' + br(ymd(lim)) };
+}
+function unitVistoriaTab(u) {
+  if (u.status !== 'occupied') { $('#uBody').innerHTML = '<div class="notice n-info">Kitnet vaga. Cadastre o inquilino e depois faça a vistoria de entrada.</div>'; return; }
+  const v = u.vistoria || { photos: [] }; const ack = (S.portals[emailKey(u.email)] || {}).vistoriaAck; const st = vistStatus(v, ack);
+  const wa = 'Olá, ' + firstName(u.tenantName) + '! As fotos da vistoria de entrada da Kitnet ' + u.number + ' já estão no Portal do Inquilino. Confira e clique em "Concordo" ou aponte o que estiver diferente. Pelo contrato, você tem ' + VIST_DAYS + ' dias; sem resposta, o laudo é considerado aceito. ' + location.origin + location.pathname;
+  $('#uBody').innerHTML = `<div class="stack"><div class="card stack">
+    <div class="row between"><h3 style="margin:0">Vistoria de entrada (fotos)</h3><span class="small">${(v.photos || []).length} foto(s)</span></div>
+    <div class="notice ${st.k === 'ok' ? 'n-ok' : st.k === 'contest' ? 'n-warn' : 'n-info'} small">${esc(st.t)}</div>
+    <div class="tk-photos" id="vPh"></div>
+    <div class="row"><input type="file" accept="image/*" multiple id="vFiles" class="i" style="flex:1"><button class="btn" id="vAdd">Adicionar fotos</button></div>
+    <div class="tiny muted">Fotografe paredes, piso, banheiro, portas, janelas, tomadas e móveis. Grave também um vídeo no celular e envie pelo WhatsApp junto com o aviso (vídeo não fica guardado na plataforma).</div>
+    <div class="row">${(v.photos || []).length ? `<button class="btn pri" id="vSend">${v.sentAt ? 'Reenviar para conferência' : 'Enviar para o inquilino conferir'}</button>` : ''}${v.sentAt && u.phone ? `<a class="btn wa sm" target="_blank" rel="noopener" href="${esc(waLink(u.phone, wa))}">Avisar no WhatsApp</a>` : ''}${(v.photos || []).length ? '<button class="btn sm danger" id="vClear">Apagar fotos</button>' : ''}</div>
+  </div></div>`;
+  loadVistPhotos(v.photos, $('#vPh'));
+  $('#vAdd').onclick = async (e) => { const fs = [...$('#vFiles').files]; if (!fs.length) return toast('Escolha as fotos.');
+    const b = e.target; b.disabled = true; const ids = [...(v.photos || [])];
+    try { for (let i = 0; i < fs.length; i++) { b.textContent = 'Enviando ' + (i + 1) + '/' + fs.length + '…'; ids.push(await uploadPhotoFile(fs[i], { unitId: u.id, email: emailKey(u.email), kind: 'vistoria' })); }
+      await saveUnit(u, { vistoria: { ...v, photos: ids } }); toast('Fotos adicionadas.'); renderUnitModal(false);
+    } catch (err) { toast(err.message || 'Erro ao enviar fotos.'); b.disabled = false; b.textContent = 'Adicionar fotos'; } };
+  const sd = $('#vSend'); if (sd) sd.onclick = async () => { await saveUnit(u, { vistoria: { ...v, sentAt: new Date().toISOString() } }); toast('Enviado! Avise o inquilino pelo WhatsApp.'); renderUnitModal(false); };
+  const cl = $('#vClear'); if (cl) cl.onclick = async () => { if (!confirm('Apagar todas as fotos da vistoria desta kitnet?')) return; await saveUnit(u, { vistoria: null }); toast('Fotos removidas.'); renderUnitModal(false); };
+}
+function vistoriaTenantCard(u) {
+  const v = u.vistoria; if (!v || !v.sentAt) return '';
+  const st = vistStatus(v, u.vistoriaAck); const open = st.k === 'wait';
+  return `<div class="card stack"><div class="row between"><h2 style="margin:0">📷 Vistoria de entrada</h2><span class="pill ${open ? 'p-soon' : 'p-paid'}">${open ? 'Confira as fotos' : 'Concluída'}</span></div>
+    <div class="small muted">Estas fotos registram como a kitnet foi entregue a você. ${open ? 'Confira e confirme abaixo. Se não houver resposta em ' + VIST_DAYS + ' dias, o laudo é considerado aceito (cláusula 1.1 do contrato).' : esc(st.t)}</div>
+    <div class="tk-photos" id="tvPh"></div>
+    ${open ? '<div class="row"><button class="btn pri" id="tvOk">Concordo com o laudo</button><button class="btn" id="tvNo">Apontar divergência</button></div><div id="tvBox"></div>' : ''}
+  </div>`;
+}
+function bindVistoriaTenant(u) {
+  const v = u.vistoria; const box = $('#tvPh'); if (!v || !box) return; loadVistPhotos(v.photos, box);
+  const send = async (status, text) => { try { await S.db.doc('portal/' + S.me).update({ vistoriaAck: { status, text: text || '', at: new Date().toISOString(), sentAt: v.sentAt } }); toast(status === 'ok' ? 'Obrigado! Laudo confirmado.' : 'Divergência enviada à administração.'); } catch (e) { toast('Não foi possível enviar. Tente de novo.'); } };
+  const ok = $('#tvOk'); if (ok) ok.onclick = () => send('ok');
+  const no = $('#tvNo'); if (no) no.onclick = () => { $('#tvBox').innerHTML = '<textarea class="i" id="tvTxt" rows="3" placeholder="Descreva o que está diferente (ex.: mancha na parede da cozinha, torneira pingando)"></textarea><div class="row" style="justify-content:flex-end;margin-top:6px"><button class="btn pri" id="tvSendNo">Enviar</button></div>'; $('#tvSendNo').onclick = () => { const t = $('#tvTxt').value.trim(); if (!t) return toast('Descreva a divergência.'); send('contest', t.slice(0, 800)); }; };
+}
 /* ---------- Renovação (inquilino) ---------- */
 function renewalTenantCard(u) {
   const r = u.renewal; if (!r || r.status === 'done') return '';
@@ -990,7 +1051,7 @@ async function saveUnit(u, patch) {
       await S.db.doc('portal/' + newKey).set({
         unitId: u.id, number: next.number, tenantName: next.tenantName, cpf: next.cpf, status: 'occupied',
         rent: next.rent, hasGarage: !!next.hasGarage, garageFee: next.garageFee, dueDay: next.dueDay,
-        contractStart: next.contractStart, contractEnd: next.contractEnd, contractUrl: next.contractUrl || '', wifiName: next.wifiName || '', wifiPass: next.wifiPass || '', energyUC: next.energyUC || '', contractFileId: next.contractFileId || '', contractFileName: next.contractFileName || '', renewal: next.renewal || null, payments: next.payments || [], asaas: next.asaas || {}, updatedAt: new Date().toISOString()
+        contractStart: next.contractStart, contractEnd: next.contractEnd, contractUrl: next.contractUrl || '', wifiName: next.wifiName || '', wifiPass: next.wifiPass || '', energyUC: next.energyUC || '', contractFileId: next.contractFileId || '', contractFileName: next.contractFileName || '', renewal: next.renewal || null, vistoria: next.vistoria || null, vistoriaAck: (() => { const a = (S.portals && S.portals[newKey] || {}).vistoriaAck; return a && next.vistoria && a.sentAt === next.vistoria.sentAt ? a : null; })(), payments: next.payments || [], asaas: next.asaas || {}, updatedAt: new Date().toISOString()
       });
     }
   } catch (e) { toast(e && e.code === 'quota_exceeded' ? 'Limite de armazenamento atingido.' : 'Não foi possível salvar. Tente de novo.'); throw e; }
@@ -1084,6 +1145,7 @@ function renderTenant() {
     <div class="cover" style="background-image:url('${photoUrl(1)}')"><div class="in"><div class="row between" style="align-items:flex-end"><div><div class="small" style="opacity:.85">Olá, ${esc(firstName(u.tenantName))} 👋</div><h2>Kitnet ${esc(u.number)}</h2>
       <div class="small" style="opacity:.9">${st.key === 'exempt' ? 'isento de aluguel' : `vencimento todo dia ${pad(u.dueDay)} • ${brl(baseValue(u))}/mês`}${u.hasGarage ? ' (com garagem)' : ''}</div></div>${statusPill(st.key)}</div></div></div>
     ${renewalTenantCard(u)}
+    ${vistoriaTenantCard(u)}
     <div class="grid g2">
       <div class="card stack ${next && next.status !== 'overdue' ? 'pay-card' : ''}">
         <h2>${next ? (next.status === 'overdue' ? 'Aluguel em atraso' : 'Próximo aluguel') : 'Pagamentos'}</h2>
@@ -1123,7 +1185,7 @@ function renderTenant() {
     ${cfg.reviewUrl ? `<div class="card row between"><div><b>Gosta de morar aqui?</b><div class="small muted">Sua avaliação no Google ajuda outros estudantes a nos encontrar.</div></div><a class="btn terra" target="_blank" rel="noopener" href="${esc(cfg.reviewUrl)}">Avaliar no Google</a></div>` : ''}
   </div>`;
   const dc = $('#dlContract'); if (dc) dc.onclick = () => downloadFile(u.contractFileId, u.contractFileName || 'contrato.pdf');
-  bindRenewalTenant(u);
+  bindRenewalTenant(u); bindVistoriaTenant(u);
   const cp = $('#cpPix'); if (cp) cp.onclick = () => copyText(pix, 'Código PIX copiado. Cole no app do seu banco.');
   const cw = $('#cpWifi'); if (cw) cw.onclick = () => copyText(u.wifiPass, 'Senha do Wi-Fi copiada');
   const cu = $('#cpUC'); if (cu) cu.onclick = () => copyText(u.energyUC, 'UC de energia copiada');
