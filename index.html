@@ -788,7 +788,7 @@ function unitDigitalTab(u) {
   const r = u.renewal || null;
   const suggestStart = u.contractEnd ? ymd(new Date(parseYmd(u.contractEnd).getTime() + 86400000)) : '';
   const suggestEnd = suggestStart ? (d => ymd(new Date(d.getFullYear() + 1, d.getMonth(), d.getDate() - 1)))(parseYmd(suggestStart)) : '';
-  const wa = r ? `Olá, ${firstName(u.tenantName)}! O contrato de renovação da Kitnet ${u.number} já está no Portal do Inquilino. É só entrar, baixar o PDF, assinar pelo gov.br e enviar de volta pelo próprio portal: ${location.origin + location.pathname}` : '';
+  const wa = r ? `Olá, ${firstName(u.tenantName)}! ${r.kind === 'novo' ? 'O seu contrato de locação' : 'O contrato de renovação'} da Kitnet ${u.number} já está no Portal do Inquilino. É só entrar, baixar o PDF, assinar pelo gov.br e enviar de volta pelo próprio portal: ${location.origin + location.pathname}` : '';
   $('#uBody').innerHTML = `<div class="stack">
     <div class="card stack">
       <h3 style="margin:0">Contrato atual (PDF)</h3>
@@ -797,20 +797,21 @@ function unitDigitalTab(u) {
       <div class="tiny muted">O inquilino baixa este arquivo direto pelo portal (não precisa mais do link do Drive).</div>
     </div>
     <div class="card stack renew-card">
-      <h3 style="margin:0">Renovação digital (assinatura gov.br)</h3>
+      <h3 style="margin:0">Contrato para assinatura digital (gov.br)</h3><div class="tiny muted">Serve para o contrato de um inquilino novo e para renovações.</div>
       ${!r || r.status === 'done' ? `
-        <div class="small muted">1) Defina as novas datas e envie o PDF do novo contrato. 2) O inquilino baixa, assina no gov.br e envia de volta pelo portal. 3) Você confere e aprova — as datas e o contrato são atualizados sozinhos.</div>
+        <div class="small muted">1) Escolha o tipo, defina as datas e envie o PDF do contrato. 2) O inquilino baixa, assina no gov.br e envia de volta pelo portal. 3) Você confere e aprova — as datas e o contrato são atualizados sozinhos.</div>
         <form id="rnForm" class="stack">
+          <div><label class="f">Tipo</label><select class="i" name="k" id="rnKind"><option value="renov">Renovação</option><option value="novo">Contrato novo (inquilino chegando)</option></select></div>
           <div class="grid g3">
-            <div><label class="f">Novo início</label><input class="i" name="s" type="date" value="${esc(suggestStart)}" required></div>
-            <div><label class="f">Novo término</label><input class="i" name="e" type="date" value="${esc(suggestEnd)}" required></div>
-            <div><label class="f">Novo aluguel (R$)</label><input class="i" name="rent" type="number" step="0.01" min="0" value="${esc(u.rent ?? 1200)}"></div>
+            <div><label class="f">Início</label><input class="i" name="s" type="date" value="${esc(suggestStart)}" required></div>
+            <div><label class="f">Término</label><input class="i" name="e" type="date" value="${esc(suggestEnd)}" required></div>
+            <div><label class="f">Aluguel (R$)</label><input class="i" name="rent" type="number" step="0.01" min="0" value="${esc(u.rent ?? 1200)}"></div>
           </div>
           <div><label class="f">PDF do contrato para assinar</label><input type="file" accept="application/pdf" name="pdf" class="i" required></div>
           <div class="row" style="justify-content:flex-end"><button class="btn pri">Enviar para o inquilino assinar</button></div>
         </form>` : r.status === 'sent' ? `
         <div class="notice n-warn small">Aguardando ${esc(firstName(u.tenantName))} assinar e enviar. Enviado em ${br(String(r.sentAt || '').slice(0, 10))}. Novo período: ${br(r.newStart)} a ${br(r.newEnd)}.</div>
-        <div class="row"><button class="btn sm" id="dlDraft">Baixar contrato enviado</button>${u.phone ? `<a class="btn wa sm" target="_blank" rel="noopener" href="${esc(waLink(u.phone, wa))}">Avisar no WhatsApp</a>` : ''}<button class="btn sm danger" id="rnCancel">Cancelar renovação</button></div>` : `
+        <div class="row"><button class="btn sm" id="dlDraft">Baixar contrato enviado</button>${u.phone ? `<a class="btn wa sm" target="_blank" rel="noopener" href="${esc(waLink(u.phone, wa))}">Avisar no WhatsApp</a>` : ''}<button class="btn sm danger" id="rnCancel">Cancelar envio</button></div>` : `
         ${r.check ? `<div class="small">Conferência automática: ${r.check.prefix ? '✅' : '❌'} mesmo contrato enviado • ${r.check.sig ? '✅' : '❌'} assinatura digital • ${r.check.name ? '✅' : '❌'} nome do inquilino no certificado</div>` : ''}
         <div class="notice n-ok small">✅ ${esc(firstName(u.tenantName))} enviou o contrato assinado em ${br(String(r.signedAt || '').slice(0, 10))}. Confira as assinaturas antes de aprovar (dá para validar em validar.iti.gov.br).</div>
         <div class="row"><button class="btn sm" id="dlSigned">Baixar contrato assinado</button><button class="btn pri sm" id="rnApprove">Aprovar: vira o contrato atual (${br(r.newStart)} a ${br(r.newEnd)})</button><button class="btn sm danger" id="rnReject">Pedir novo envio</button></div>`}
@@ -820,18 +821,19 @@ function unitDigitalTab(u) {
   $('#upCur').onclick = async (e) => { const f = $('#curFile').files[0]; try { busy(e.target, 'Enviando…'); const up = await uploadPdf(f, { unitId: u.id, email: emailKey(u.email), kind: 'contract' });
     await saveUnit(u, { contractFileId: up.id, contractFileName: up.name }); toast('Contrato guardado.'); renderUnitModal(false); } catch (err) { toast(err.message || 'Erro ao enviar.'); e.target.disabled = false; e.target.textContent = 'Enviar PDF'; } };
   const fm = $('#rnForm');
+  const rk = $('#rnKind'); if (rk) rk.onchange = () => { const fs = $('#rnForm'); let st = rk.value === 'novo' ? (u.contractStart || ymd(new Date())) : suggestStart; const d = parseYmd(st); const en = ymd(new Date(d.getFullYear(), d.getMonth() + (rk.value === 'novo' ? 30 : 12), d.getDate() - 1)); fs.s.value = st; fs.e.value = en; };
   if (fm) fm.onsubmit = async (e) => { e.preventDefault(); const f = new FormData(fm); const b = fm.querySelector('button');
     if (f.get('e') <= f.get('s')) return toast('O término precisa ser depois do início.');
     try { busy(b, 'Enviando…'); const up = await uploadPdf(f.get('pdf'), { unitId: u.id, email: emailKey(u.email), kind: 'draft' });
-      await saveUnit(u, { renewal: { status: 'sent', draftId: up.id, draftName: up.name, newStart: f.get('s'), newEnd: f.get('e'), newRent: r2(f.get('rent')), sentAt: new Date().toISOString() } });
+      await saveUnit(u, { renewal: { status: 'sent', draftId: up.id, draftName: up.name, kind: f.get('k') || 'renov', newStart: f.get('s'), newEnd: f.get('e'), newRent: r2(f.get('rent')), sentAt: new Date().toISOString() } });
       toast('Enviado! Avise o inquilino pelo WhatsApp.'); fm.remove(); renderUnitModal(false); } catch (err) { toast(err.message || 'Erro ao enviar.'); b.disabled = false; b.textContent = 'Enviar para o inquilino assinar'; } };
   const d1 = $('#dlDraft'); if (d1) d1.onclick = () => downloadFile(r.draftId, r.draftName);
   const d2 = $('#dlSigned'); if (d2) d2.onclick = () => downloadFile(r.signedId, r.signedName);
-  const c = $('#rnCancel'); if (c) c.onclick = async () => { await saveUnit(u, { renewal: null }); toast('Renovação cancelada.'); renderUnitModal(false); };
+  const c = $('#rnCancel'); if (c) c.onclick = async () => { await saveUnit(u, { renewal: null }); toast('Envio cancelado.'); renderUnitModal(false); };
   const rj = $('#rnReject'); if (rj) rj.onclick = async () => { await saveUnit(u, { renewal: { ...r, status: 'sent', signedId: '', signedName: '', signedAt: '' } }); toast('O inquilino poderá enviar de novo.'); renderUnitModal(false); };
   const ap = $('#rnApprove'); if (ap) ap.onclick = async () => { busy(ap, 'Aprovando…');
     await saveUnit(u, { contractStart: r.newStart, contractEnd: r.newEnd, rent: r.newRent ?? u.rent, contractFileId: r.signedId, contractFileName: r.signedName, renewal: { ...r, status: 'done', approvedAt: new Date().toISOString() } });
-    toast('Contrato renovado! Datas atualizadas.'); renderUnitModal(false); };
+    toast('Contrato aprovado! Datas atualizadas.'); renderUnitModal(false); };
 }
 
 /* ---------- Renovação (inquilino) ---------- */
@@ -839,8 +841,8 @@ function renewalTenantCard(u) {
   const r = u.renewal; if (!r || r.status === 'done') return '';
   const sent = r.status === 'sent';
   return `<div class="card stack renew-card">
-    <div class="row between"><h2 style="margin:0">📝 Renovação do seu contrato</h2><span class="pill ${sent ? 'p-soon' : 'p-paid'}">${sent ? 'Aguardando sua assinatura' : r.autoOk ? 'Renovado ✅' : 'Em conferência'}</span></div>
-    <div class="small muted">Novo período: <b>${br(r.newStart)}</b> a <b>${br(r.newEnd)}</b>${r.newRent ? ` • aluguel ${brl(r.newRent)}` : ''}. Tudo pelo celular, sem precisar ir até a administração.</div>
+    <div class="row between"><h2 style="margin:0">📝 ${r.kind === 'novo' ? 'Seu contrato de locação' : 'Renovação do seu contrato'}</h2><span class="pill ${sent ? 'p-soon' : 'p-paid'}">${sent ? 'Aguardando sua assinatura' : r.autoOk ? 'Assinado ✅' : 'Em conferência'}</span></div>
+    <div class="small muted">Período: <b>${br(r.newStart)}</b> a <b>${br(r.newEnd)}</b>${r.newRent ? ` • aluguel ${brl(r.newRent)}` : ''}. Tudo pelo celular, sem precisar ir até a administração.</div>
     <div class="steps">
       <div class="done"><div><b>Baixe o contrato</b><span class="small muted">Leia com calma antes de assinar.</span><div style="margin-top:6px"><button class="btn sm" id="tDraft">Baixar contrato (PDF)</button></div></div></div>
       <div class="${sent ? '' : 'done'}"><div><b>Assine pelo gov.br</b><span class="small muted">Entre no assinador com sua conta gov.br (nível prata ou ouro), envie o PDF, assine e baixe o arquivo assinado.</span><div style="margin-top:6px"><a class="btn sm" target="_blank" rel="noopener" href="${GOVBR_SIGN}">Abrir assinador gov.br</a></div></div></div>
@@ -861,7 +863,7 @@ function bindRenewalTenant(u) {
       b.textContent = 'Enviando…';
       const up = await uploadPdf(f, { unitId: u.unitId, email: S.me, kind: 'signed' });
       await S.db.doc('portal/' + S.me).update({ renewal: { ...r, status: 'signed', signedId: up.id, signedName: up.name, signedAt: new Date().toISOString(), check: { prefix: !!chk.prefix, sig: !!chk.sig, name: !!chk.name }, autoOk: !!chk.ok } });
-      toast(chk.ok ? 'Assinatura conferida e contrato renovado! 🎉' : 'Contrato enviado! A administração vai conferir.'); } catch (e) { toast(e.message && !e.code ? e.message : 'Não foi possível enviar. Tente de novo.'); b.disabled = false; b.textContent = 'Enviar assinado'; } };
+      toast(chk.ok ? 'Assinatura conferida! Contrato ativo 🎉' : 'Contrato enviado! A administração vai conferir.'); } catch (e) { toast(e.message && !e.code ? e.message : 'Não foi possível enviar. Tente de novo.'); b.disabled = false; b.textContent = 'Enviar assinado'; } };
 }
 
 /* ---------- Manutenção ---------- */
