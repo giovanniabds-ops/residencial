@@ -270,7 +270,7 @@ function msgFor(type, u, cfg, charge) {
   const portal = `\nSeu contrato, vencimentos e recibos ficam no Portal do Inquilino.`;
   if (type === 'reminder' && charge) return `Olá, ${n}! Tudo bem?\nLembrete do Residencial Boa Esperança: o aluguel da Kitnet ${u.number} referente a ${monthLabel(charge.month)} vence em ${br(ymd(charge.due))}.\nValor: ${brl(charge.amount.total)} (água e internet inclusas).${pay}${portal}`;
   if (type === 'overdue' && charge) return `Olá, ${n}! Tudo bem?\nAqui é da administração do Residencial Boa Esperança. O aluguel da Kitnet ${u.number} de ${monthLabel(charge.month)} venceu em ${br(ymd(charge.due))} e ainda consta em aberto.\nValor atualizado hoje: ${brl(charge.amount.total)} (aluguel ${brl(charge.amount.base)} + multa ${brl(charge.amount.fine)} + juros ${brl(charge.amount.interest)}).${pay}\nSe já pagou, pode desconsiderar e nos enviar o comprovante. Obrigado!`;
-  if (type === 'renewal') return `Olá, ${n}! Tudo bem?\nO contrato da Kitnet ${u.number} no Residencial Boa Esperança termina em ${br(u.contractEnd)}. Você quer renovar por mais 12 meses? Podemos combinar os detalhes por aqui.`;
+  if (type === 'renewal') return `Olá, ${n}! Tudo bem?\nO contrato da Kitnet ${u.number} no Residencial Boa Esperança termina em ${br(u.contractEnd)}. Você quer renovar por mais 6 meses? Podemos combinar os detalhes por aqui.`;
   if (type === 'review') return `Olá, ${n}! Obrigado por manter o aluguel em dia 🙏\nSe estiver gostando de morar no Residencial Boa Esperança, sua avaliação no Google ajuda muito outros estudantes a nos encontrarem:${cfg.reviewUrl ? '\n' + cfg.reviewUrl : ''}`;
   return `Olá, ${n}! Aqui é da administração do Residencial Boa Esperança (Kitnet ${u.number}).`;
 }
@@ -587,7 +587,7 @@ function unitDataTab(u) {
         <div style="grid-column:1/-1"><label class="f" style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" name="cobrancaOk" ${u.cobrancaOk ? 'checked' : ''}> Dados de cobrança conferidos — liberar cobrança automática (Pix)</label><div class="small muted">Enquanto desmarcado, o sistema não gera cobrança para esta kitnet.</div></div>
       </div>
       <div class="row between" style="margin-top:6px"><div class="tiny muted">Em meses mais curtos (ex.: dia 31 em fevereiro), o vencimento passa para o último dia do mês.</div>
-        ${occ && u.contractEnd ? `<button type="button" class="btn sm" id="renew12">Renovar +12 meses</button>` : ''}</div>
+        ${occ && u.contractEnd ? `<button type="button" class="btn sm" id="renew12">Renovar +6 meses</button>` : ''}</div>
     </div>
     <div class="grid g3">
       <div><label class="f">Situação</label><select class="i" name="status"><option value="occupied" ${occ ? 'selected' : ''}>Alugada</option><option value="vacant" ${!occ ? 'selected' : ''}>Vaga</option></select></div>
@@ -655,7 +655,7 @@ function unitDataTab(u) {
   };
   const rn = $('#renew12');
   if (rn) rn.onclick = () => { const f = $('#unitForm'); const e = parseYmd(f.contractEnd.value || u.contractEnd); if (!e) return;
-    const n = new Date(e.getFullYear() + 1, e.getMonth(), e.getDate()); f.contractEnd.value = ymd(n);
+    const n = new Date(e.getFullYear(), e.getMonth() + 6, e.getDate()); f.contractEnd.value = ymd(n);
     toast('Novo término: ' + br(ymd(n)) + '. Ajuste o aluguel se houver reajuste e clique em Salvar.'); };
   const end = $('#endLease');
   if (end) end.onclick = () => {
@@ -781,7 +781,7 @@ function unitDigitalTab(u) {
   if (u.status !== 'occupied') { $('#uBody').innerHTML = `<div class="notice n-info">Kitnet vaga. Cadastre um inquilino primeiro.</div>`; return; }
   const r = u.renewal || null;
   const suggestStart = u.contractEnd ? ymd(new Date(parseYmd(u.contractEnd).getTime() + 86400000)) : '';
-  const suggestEnd = suggestStart ? (d => ymd(new Date(d.getFullYear() + 1, d.getMonth(), d.getDate() - 1)))(parseYmd(suggestStart)) : '';
+  const suggestEnd = suggestStart ? (d => ymd(new Date(d.getFullYear(), d.getMonth() + 6, d.getDate() - 1)))(parseYmd(suggestStart)) : '';
   const wa = r ? `Olá, ${firstName(u.tenantName)}! ${r.kind === 'novo' ? 'O seu contrato de locação' : 'O contrato de renovação'} da Kitnet ${u.number} já está no Portal do Inquilino. É só entrar, baixar o PDF, assinar pelo gov.br e enviar de volta pelo próprio portal: ${location.origin + location.pathname}` : '';
   $('#uBody').innerHTML = `<div class="stack">
     <div class="card stack">
@@ -815,7 +815,7 @@ function unitDigitalTab(u) {
   $('#upCur').onclick = async (e) => { const f = $('#curFile').files[0]; try { busy(e.target, 'Enviando…'); const up = await uploadPdf(f, { unitId: u.id, email: emailKey(u.email), kind: 'contract' });
     await saveUnit(u, { contractFileId: up.id, contractFileName: up.name }); toast('Contrato guardado.'); renderUnitModal(false); } catch (err) { toast(err.message || 'Erro ao enviar.'); e.target.disabled = false; e.target.textContent = 'Enviar PDF'; } };
   const fm = $('#rnForm');
-  const rk = $('#rnKind'); if (rk) rk.onchange = () => { const fs = $('#rnForm'); let st = rk.value === 'novo' ? (u.contractStart || ymd(new Date())) : suggestStart; const d = parseYmd(st); const en = ymd(new Date(d.getFullYear(), d.getMonth() + (rk.value === 'novo' ? 30 : 12), d.getDate() - 1)); fs.s.value = st; fs.e.value = en; };
+  const rk = $('#rnKind'); if (rk) rk.onchange = () => { const fs = $('#rnForm'); let st = rk.value === 'novo' ? (u.contractStart || ymd(new Date())) : suggestStart; const d = parseYmd(st); const en = ymd(new Date(d.getFullYear(), d.getMonth() + 6, d.getDate() - 1)); fs.s.value = st; fs.e.value = en; };
   if (fm) fm.onsubmit = async (e) => { e.preventDefault(); const f = new FormData(fm); const b = fm.querySelector('button');
     if (f.get('e') <= f.get('s')) return toast('O término precisa ser depois do início.');
     try { busy(b, 'Enviando…'); const up = await uploadPdf(f.get('pdf'), { unitId: u.id, email: emailKey(u.email), kind: 'draft' });
